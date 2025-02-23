@@ -1543,148 +1543,159 @@ def get_critical_employees_all_models(models, X_transformed, df, scaler_file="Mo
 
     return results
 
-def get_critical_employees_last_6_months(model, X_transformed, df, scaler_file="Models/scaler.pkl",
-                                         feature_names_file="Models/lightgbm_feature_names.pkl", pca=None,
-                                         threshold=0):
+def get_critical_employees_all_models_6_months(models, X_transformed, df, scaler_file="Models/scaler.pkl",
+                                               feature_names_file="Models/lightgbm_feature_names.pkl", pca=None,
+                                               threshold=0.0):
     """
     Identifiziert kritische Mitarbeiter (Fluktuationswahrscheinlichkeit > Schwelle),
     unter Berücksichtigung der letzten 6 Monate und optionaler PCA. Berechnet
-    zusätzliche Metriken (Durchschnitt, Maximalwert der Wahrscheinlichkeit).
+    zusätzliche Metriken (Durchschnitt, Maximalwert der Wahrscheinlichkeit) durch Monatsweise Analyse.
 
     Args:
         model: Das trainierte Modell für die Vorhersage.
-        X_transformed (np.ndarray): Die preprocessierten Features (unskaliert).
+        X_transformed (np.ndarray): Die preprocessierten Features (unskaliert vor Skalierung).
         df (pd.DataFrame): Der DataFrame mit zusätzlichen Informationen (Monat, Jahr, etc.).
         scaler_file (str): Dateiname des gespeicherten Scalers.
-        feature_names_file (str): Pfad zu gespeicherten Feature-Namen (für LightGBM).
+        feature_names_file (str): Optional, Pfad zu LightGBM-Feature-Namen.
         pca (PCA, optional): Ein optionales PCA-Objekt für Dimensionenreduktion.
-        threshold (float): Die Schwelle für Fluktuationswahrscheinlichkeit.
+        threshold (float): Schwellenwert für Fluktuationswahrscheinlichkeit in Prozent.
 
     Returns:
-        Tuple[pd.DataFrame, pd.DataFrame]: Mitarbeiter der letzten 6 Monate und Top 15 sortiert.
+        pd.DataFrame: Aggregierte Ergebnisse für Fluktuationsmetriken pro Mitarbeiter.
     """
-    print(f"\nShape von X_transformed: {X_transformed.shape}")
+    results = {}
+    print(f"Shape von X_transformed: {X_transformed.shape}")
     print(f"Shape von df: {df.shape}")
 
     # ** Dynamisch die letzten 6 Monate berechnen **
     max_year = df["Jahr"].max()
     max_month = df[df["Jahr"] == max_year]["Monat"].max()
 
-    # Letzte 6 Monate bestimmen (als (Jahr, Monat)-Paare)
+    # Letzte 6 Monate bestimmen
     recent_months = []
     for i in range(6):
         month = max_month - i
         year = max_year
-        if month <= 0:  # Setze Monat zurück und wechsle das Jahr
+        if month <= 0:  # Rückschritt ins Vorjahr
             month += 12
             year -= 1
         recent_months.append((year, month))
 
     print(f"Berücksichtigte Monate (letzte 6 Monate): {recent_months}")
 
-    # ** Scaler laden und anwenden **
-    print(f"Lade Scaler aus Datei '{scaler_file}'...")
+    # ** Scaler laden und Testdaten skalieren **
     try:
+        print(f"Lade Scaler aus '{scaler_file}'...")
         scaler = joblib.load(scaler_file)
         X_transformed = scaler.transform(X_transformed)
-        print("Scaler erfolgreich angewendet.")
+        print("Testdaten erfolgreich skaliert.")
+    except FileNotFoundError:
+        raise FileNotFoundError(f"Scaler-Datei '{scaler_file}' nicht gefunden.")
     except Exception as e:
-        print(f"Fehler beim Laden des Scalers: {e}")
-        return None, None
+        raise RuntimeError(f"Fehler beim Skalieren der Daten: {e}")
 
-    # ** Synchronisierung zwischen df und X_transformed **
+    # ** Synchronisation prüfen **
     if len(X_transformed) != len(df):
-        print("WARNUNG: Dimensionen von X_transformed und df stimmen nicht überein. Synchronisiere Daten...")
-        df = df.iloc[:len(X_transformed)].reset_index(drop=True).copy()
+        raise ValueError("Die Dimensionen von X_transformed und df stimmen nicht überein.")
+    df = df.reset_index(drop=True).copy()
 
-    # ** LightGBM Feature-Namen verwenden (falls zutreffend) **
-    if isinstance(model, lgb.LGBMClassifier):
-        if feature_names_file:
+    # ** Iteration über alle Modelle **
+    for model_name, model in models.items():
+        print(f"\nBearbeite Modell: {model_name}")
+        try:
+            X_model_transformed = X_transformed
+
+            # ** LightGBM: Feature-Namen laden und anwenden **
+            if isinstance(model, lgb.LGBMClassifier) and feature_names_file:
+                try:
+                    with open(feature_names_file, 'rb') as f:
+                        feature_names = joblib.load(f)
+                    print(f"Feature-Namen erfolgreich geladen: {feature_names}")
+
+                    # X_transformed in DataFrame mit den korrekten Namen konvertieren
+                    X_model_transformed = pd.DataFrame(X_transformed, columns=feature_names)
+                except Exception as e:
+                    print(f"Fehler beim Laden der Feature-Namen für '{model_name}': {e}")
+                    results[model_name] = None
+                    continue
+
+            # ** Optional: PCA anwenden **
+            if pca is not None and isinstance(model, LogisticRegression):
+                try:
+                    print(f"PCA wird für '{model_name}' angewendet...")
+                    X_model_transformed = pca.transform(X_model_transformed)
+                    print(f"PCA erfolgreich angewendet. Shape: {X_model_transformed.shape}")
+                except Exception as e:
+                    print(f"Fehler bei PCA für '{model_name}': {e}. Fortfahren ohne PCA.")
+
+            # ** Daten für die letzten 6 Monate sammeln **
+            monthly_probabilities = []
+            for year, month in recent_months:
+                print(f"Verarbeite Monat {month}/{year}...")
+                monthly_data = df[(df["Jahr"] == year) & (df["Monat"] == month)]
+
+                if monthly_data.empty:
+                    print(f"Keine Daten für {month}/{year}. Überspringen...")
+                    continue
+
+                indices = monthly_data.index
+
+                # X-Daten für den Monat selektieren
+                try:
+                    if isinstance(X_model_transformed, pd.DataFrame):
+                        monthly_X = X_model_transformed.loc[indices]
+                    else:
+                        monthly_X = X_model_transformed[indices, :]
+
+                    # Wahrscheinlichkeiten berechnen
+                    if hasattr(model, "predict_proba"):
+                        monthly_proba = model.predict_proba(monthly_X)[:, 1]
+                    elif hasattr(model, "predict"):
+                        monthly_proba = model.predict(monthly_X).flatten()
+                    else:
+                        print(f"Modell '{model_name}' unterstützt keine probabilistischen Vorhersagen.")
+                        break
+
+                    monthly_data = monthly_data.copy()
+                    monthly_data["Fluktuationswahrscheinlichkeit"] = np.minimum(monthly_proba * 100, 100)  # Max 100%
+                    monthly_probabilities.append(monthly_data)
+                except Exception as e:
+                    print(f"Fehler für {month}/{year}: {e}")
+                    continue
+
+            # ** Monatliche Ergebnisse kombinieren **
+            if not monthly_probabilities:
+                print(f"Keine Daten für '{model_name}' in den letzten 6 Monaten.")
+                results[model_name] = None
+                continue
+
+            combined_data = pd.concat(monthly_probabilities, ignore_index=True)
+
+            # ** Aggregierte Metriken pro Mitarbeiter berechnen **
             try:
-                with open(feature_names_file, 'rb') as f:
-                    feature_names = joblib.load(f)
-                print(f"Feature-Namen erfolgreich geladen: {feature_names}")
-
-                # Konvertiere Array in DataFrame mit Spaltennamen
-                X_transformed = pd.DataFrame(X_transformed, columns=feature_names)
+                metrics = combined_data.groupby("Mitarbeiter_ID").agg(
+                    Durchschnitt=("Fluktuationswahrscheinlichkeit", "mean"),
+                    Maximum=("Fluktuationswahrscheinlichkeit", "max")
+                ).reset_index()
             except Exception as e:
-                print(f"Fehler beim Laden der Feature-Namen: {e}")
-                return None, None
+                print(f"Fehler bei der Metrikberechnung für '{model_name}': {e}")
+                results[model_name] = None
+                continue
 
-    # ** Optional: PCA anwenden (nur für Logistic Regression) **
-    if pca is None and isinstance(model, LogisticRegression):
-        pca_path = "Models/Back/pca_model.pkl"
-        if os.path.exists(pca_path):
-            try:
-                print(f"Lade gespeichertes PCA-Modell aus '{pca_path}'...")
-                pca = joblib.load(pca_path)
-                X_transformed = pca.transform(X_transformed)
-                print(f"PCA-Transformation erfolgreich. Shape: {X_transformed.shape}")
-            except Exception as e:
-                print(f"Fehler beim Laden oder Anwenden von PCA: {e}")
-                return None, None
+            # ** Ergebnisse speichern **
+            metrics = metrics.sort_values(by=["Maximum", "Durchschnitt"], ascending=False)
+            top_15 = metrics.head(15)  # Top 15 Einträge
+            results[model_name] = {
+                "gesamt": metrics,
+                "top_15": top_15
+            }
 
-    # ** Berechnung der Vorhersagen **
-    print("Berechnung der Wahrscheinlichkeiten mit dem Modell...")
-    try:
-        if hasattr(model, "predict_proba"):
-            y_proba = model.predict_proba(X_transformed)[:, 1]
-        elif hasattr(model, "predict"):
-            y_proba = model.predict(X_transformed).flatten()
-        else:
-            raise AttributeError(f"Modelltyp '{type(model)}' wird nicht unterstützt.")
-    except Exception as e:
-        print(f"Fehler bei der Vorhersage: {e}")
-        return None, None
+        except Exception as e:
+            print(f"Fehler bei Verarbeitung des Modells '{model_name}': {e}")
+            results[model_name] = None
 
-    # ** Verknüpfen der Wahrscheinlichkeiten mit dem DataFrame **
-    try:
-        # Fluktuationswahrscheinlichkeit in Prozent umrechnen
-        df["Fluktuationswahrscheinlichkeit"] = y_proba * 100
+    return results
 
-        # Daten filtern: nur letzte 6 Monate und aktive Mitarbeiter
-        df_filtered = df[
-            df[["Jahr", "Monat"]].apply(tuple, axis=1).isin(recent_months) &
-            (df["Fluktuation"] == 0)
-            ].copy()
-        print(f"Shape nach Filterung (letzte 6 Monate & aktive Mitarbeiter): {df_filtered.shape}")
-
-        if df_filtered.empty:
-            print("Keine Daten für die letzten 6 Monate verfügbar.")
-            return None, None
-
-        # Berechnung von Metriken: Durchschnitt und Maximalwert pro Mitarbeiter
-        metrics = df_filtered.groupby("Mitarbeiter_ID").agg(
-            Durchschnitt=("Fluktuationswahrscheinlichkeit", "mean"),
-            Maximum=("Fluktuationswahrscheinlichkeit", "max")
-        ).reset_index()
-
-        # Sortieren der Metriken: Zuerst nach Maximalwert, dann nach Durchschnitt
-        metrics = metrics.sort_values(by=["Maximum", "Durchschnitt"], ascending=False)
-
-        # Verknüpfung der Metriken mit den ursprünglichen Daten
-        critical_employees = pd.merge(df_filtered, metrics, on="Mitarbeiter_ID", how="inner")
-
-        # Filter: Mitarbeiter mit Fluktuationswahrscheinlichkeit > threshold
-        critical_employees = critical_employees[critical_employees["Fluktuationswahrscheinlichkeit"] > threshold]
-
-        # Entfernen von Dubletten basierend auf Mitarbeiter_ID, falls vorhanden
-        if "Mitarbeiter_ID" in critical_employees.columns:
-            duplicate_count = critical_employees.duplicated(subset=["Mitarbeiter_ID"]).sum()
-            if duplicate_count > 0:
-                print(f"Warnung: {duplicate_count} doppelte Einträge entfernt.")
-                critical_employees = critical_employees.drop_duplicates(subset=["Mitarbeiter_ID"])
-
-        # Top 15 kritische Mitarbeiter
-        top_15 = critical_employees.head(15)
-
-    except Exception as e:
-        print(f"Fehler bei der Verarbeitung der Wahrscheinlichkeiten: {e}")
-        return None, None
-
-    # ** Rückgabe der Ergebnisse **
-    print("Analyse der letzten 6 Monate abgeschlossen.")
-    return critical_employees, top_15
 
 def save_results(data, file_name_base, output_dir):
     """
@@ -1741,7 +1752,7 @@ def compare_model_top_employees(file_paths, output_file="Outputs/Vergleich_Top_1
             df = df[["Name", "Fluktuationswahrscheinlichkeit"]].copy()
 
             # Fluktuationswahrscheinlichkeit in Prozent umrechnen
-            df["Fluktuationswahrscheinlichkeit"] = df["Fluktuationswahrscheinlichkeit"] * 100
+            df["Fluktuationswahrscheinlichkeit"] = df["Fluktuationswahrscheinlichkeit"]
 
             # Spalte umbenennen
             df.rename(columns={"Fluktuationswahrscheinlichkeit": f"Fluktuation_{model} (%)"}, inplace=True)
@@ -2086,52 +2097,67 @@ def main():
     except Exception as e:
         print(f"Fehler beim Ermitteln der kritischen Mitarbeiter und Top 15 für alle Modelle: {e}")
 
-    # 14. Kritische Mitarbeiter der letzten 6 Monate ermitteln
-    print("\n### Schritt 14: Kritische Mitarbeiter der letzten 6 Monate ermitteln ###")
-    print("Ermittle kritische Mitarbeiter, die aktiv sind und aus den letzten 6 Monaten stammen...")
+    # 14. Kritische Mitarbeiter und Top 15 über die letzten 6 Monate für jedes Modell ermitteln
+    print("\n### Schritt 14: Kritische Mitarbeiter und Top 15 über die letzten 6 Monate ermitteln ###")
+    print("Kritische Mitarbeiter und Top 15 über die letzten 6 Monate ermitteln...")
 
     try:
-        # Überprüfen, ob PCA angewendet werden soll für das aktuell beste Modell
-        apply_pca = best_model_name == "Logistic Regression"
+        for model_name in include_models_all:  # Verwende die Modellnamen aus der Auswahl
+            try:
+                print(f"\nBearbeite Modell: {model_name}")
 
-        # Funktionsaufruf: Kritische Mitarbeiter für die letzten 6 Monate analysieren
-        critical_employees_last_6_months, top_15_last_6_months = get_critical_employees_last_6_months(
-            best_model,
-            X_transformed,
-            df,
-            pca=pca if apply_pca else None,
-            threshold=0.7  # Beispiel: Threshold für Kündigungswahrscheinlichkeit
-        )
+                apply_pca = model_name == "Logistic Regression"  # Prüfen, ob PCA erforderlich ist
 
-        # Kritische Mitarbeiter der letzten 6 Monate ausgeben
-        if critical_employees_last_6_months.empty:
-            print("WARNUNG: Keine kritischen Mitarbeiter in den letzten 6 Monaten gefunden.")
-        else:
-            print(
-                f"Anzahl der kritischen Mitarbeiter in den letzten 6 Monaten: {len(critical_employees_last_6_months)}")
-            print(critical_employees_last_6_months.head(5))
+                # Funktionsaufruf für kritische Mitarbeiter über die letzten 6 Monate
+                critical_employees_6_months_data = get_critical_employees_all_models_6_months(
+                    models={model_name: models[model_name]},  # Nur das aktuelle Modell übergeben
+                    X_transformed=X_transformed,
+                    df=df,
+                    pca=pca if apply_pca else None
+                )
 
-        # Top 15 Mitarbeiter ausgeben
-        if top_15_last_6_months.empty:
-            print("WARNUNG: Keine Top 15 Mitarbeiter in den letzten 6 Monaten gefunden.")
-        else:
-            print("Top 15 Mitarbeiter der letzten 6 Monate:")
-            print(top_15_last_6_months[['Mitarbeiter_ID', 'Name', 'Fluktuationswahrscheinlichkeit']])
+                # Ergebnisse extrahieren
+                if model_name in critical_employees_6_months_data:
+                    aggregated_metrics = critical_employees_6_months_data[model_name]["gesamt"]
+                    top_15_employees = critical_employees_6_months_data[model_name]["top_15"]
 
-        # Ergebnisse speichern
-        save_results(
-            critical_employees_last_6_months,
-            "Critical_Mitarbeiter_Last_6_Months",
-            output_dir
-        )
-        save_results(
-            top_15_last_6_months,
-            "Top_15_Mitarbeiter_Last_6_Months",
-            output_dir
-        )
+                    # Ergebnisse validieren und anzeigen
+                    if aggregated_metrics.empty:
+                        print(
+                            f"WARNUNG: Keine kritischen Mitarbeiter für {model_name} in den letzten 6 Monaten gefunden.")
+                    else:
+                        print(
+                            f"Anzahl der kritischen Mitarbeiter für {model_name} über die letzten 6 Monate: {len(aggregated_metrics)}")
+                        print(aggregated_metrics.head(5))
+
+                    if top_15_employees.empty:
+                        print(f"WARNUNG: Keine Top 15 Mitarbeiter für {model_name} in den letzten 6 Monaten gefunden.")
+                    else:
+                        print(f"Top 15 Mitarbeiter (über die letzten 6 Monate) für {model_name}:\n"
+                              f"{top_15_employees[['Mitarbeiter_ID', 'Durchschnitt', 'Maximum']]}")
+
+                    # Ergebnisse speichern
+                    save_results(
+                        data=aggregated_metrics,
+                        file_name_base=f"Aggregated_Metrics_6Months_{model_name.replace(' ', '_')}",
+                        output_dir=output_dir
+                    )
+                    save_results(
+                        data=top_15_employees,
+                        file_name_base=f"Top_15_Mitarbeiter_6Months_{model_name.replace(' ', '_')}",
+                        output_dir=output_dir
+                    )
+                else:
+                    print(f"WARNUNG: Keine Ergebnisse für {model_name} über die letzten 6 Monate vorhanden.")
+
+            except KeyError:
+                print(f"FEHLER: Modell '{model_name}' wurde nicht in 'models' gefunden.")
+            except Exception as e:
+                print(f"Fehler bei der Verarbeitung des Modells '{model_name}' über die letzten 6 Monate: {e}")
 
     except Exception as e:
-        print(f"Fehler beim Ermitteln der kritischen Mitarbeiter der letzten 6 Monate: {e}")
+        print(
+            f"Fehler beim Ermitteln der kritischen Mitarbeiter und Top 15 über die letzten 6 Monate für alle Modelle: {e}")
 
     # 15. Ergebnisse speichern
     print("\n### Schritt 14: Ergebnisse speichern ###")
