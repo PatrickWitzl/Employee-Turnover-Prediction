@@ -38,13 +38,6 @@
             </Attribute>
           </value>
         </entry>
-        <entry key="/Outputs/Top_15_Mitarbeiter_Last_6_Months.csv">
-          <value>
-            <Attribute>
-              <option name="separator" value="," />
-            </Attribute>
-          </value>
-        </entry>
         <entry key="/Outputs/Vergleich_Top_15.csv">
           <value>
             <Attribute>
