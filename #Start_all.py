@@ -46,6 +46,7 @@ def start_all_pys():
 # Dauerberechnung
 end_time = time.time()
 print(f"Analyse abgeschlossen in {end_time - start_time:.2f} Sekunden.")
+print(test)
 
 # Hauptfunktion starten
 if __name__ == "__main__":
