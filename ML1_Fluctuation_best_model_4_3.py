@@ -1791,6 +1791,72 @@ def compare_model_top_employees(file_paths, output_file="Outputs/Vergleich_Top_1
 
     return combined_df
 
+def compare_model_top_employees(file_paths, output_file="Outputs/Model_Comparison_Top_15.csv"):
+    """
+    Vergleicht die Top-15-Mitarbeiter aus verschiedenen Modellen in Bezug auf ihre Fluktuationswahrscheinlichkeiten.
+    Die Ergebnisse werden zusammengeführt, Häufigkeiten berechnet und eine kompakte Ausgabe erstellt.
+
+    Args:
+        file_paths (dict): Dictionary mit Modellnamen als Key und Datei-Pfaden als Value.
+        output_file (str): Pfad zur Ausgabedatei.
+
+    Returns:
+        pd.DataFrame: Zusammengeführte und aggregierte Ergebnisse.
+    """
+    # Initialisiere eine Dictionary, um die Daten pro Modell nach dem Import abzulegen
+    model_data = {}
+
+    # Lade die Daten aus den CSV-Dateien
+    print("Lade Top-15-Daten aus den Modellen...")
+    for model_name, file_path in file_paths.items():
+        try:
+            print(f"Lade Daten für Modell: {model_name} aus {file_path}")
+            df = pd.read_csv(file_path)  # Lade die CSV-Datei
+
+            # Sicherstellen, dass die erforderlichen Spalten vorhanden sind
+            required_columns = {"Name", "Fluktuationswahrscheinlichkeit"}
+            if not required_columns.issubset(df.columns):
+                raise ValueError(f"Die Datei '{file_path}' enthält nicht die erforderlichen Spalten.")
+
+            # Füge die Modellinformationen den Daten hinzu
+            df = df[["Name", "Fluktuationswahrscheinlichkeit"]].copy()
+            df.rename(columns={"Fluktuationswahrscheinlichkeit": f"Fluktuation_{model_name} (%)"}, inplace=True)
+            model_data[model_name] = df
+
+        except Exception as e:
+            print(f"Fehler beim Laden von '{file_path}': {e}")
+            continue
+
+    # Zusammenführen der Daten aus allen Modellen
+    print("\nKombiniere Daten aus allen Modellen...")
+    combined_df = None
+    for model_name, df in model_data.items():
+        if combined_df is None:
+            combined_df = df
+        else:
+            combined_df = pd.merge(combined_df, df, on="Name", how="outer")
+
+    # Zähle, wie oft jeder Name in den Modellen vorkommt
+    print("\nZähle, wie oft jeder Name in den Modellen aufgenommen wurde...")
+    combined_df["Häufigkeit_in_Modellen"] = combined_df.notna().sum(axis=1) - 1  # Ignoriere 'Name'-Spalte
+
+    # Übereinstimmung basierend auf Häufigkeit erstellen
+    combined_df["Übereinstimmung"] = combined_df["Häufigkeit_in_Modellen"] > 1
+
+    # Sortiere nach Namen alphabetisch
+    combined_df.sort_values("Name", inplace=True)
+
+    # Speichere die Ergebnisse in eine CSV-Datei
+    print(f"Speichere die kombinierten Ergebnisse in '{output_file}'...")
+    try:
+        combined_df.to_csv(output_file, index=False)
+        print("Ergebnisse erfolgreich gespeichert.")
+    except Exception as e:
+        print(f"Fehler beim Speichern der Datei: {e}")
+
+    return combined_df
+
+
 # Hauptlogik für Fluktuationsanalyse und Modelltraining
 def main():
     """
@@ -2178,6 +2244,19 @@ def main():
         "XGBoost": "Outputs/Top_15_Mitarbeiter_XGBoost.csv"
     }
 
+    result = compare_model_top_employees(file_paths)
+    print(result)
+
+    #17 Vergleich der Modelle 6 Monate
+    file_paths = {
+        "LightGBM": "Outputs/Top_15_Mitarbeiter_LightGBM.csv",
+        "Logistic_Regression": "Outputs/Top_15_Mitarbeiter_Logistic_Regression.csv",
+        "Neural_Network": "Outputs/Top_15_Mitarbeiter_Neural_Network.csv",
+        "Random_Forest": "Outputs/Top_15_Mitarbeiter_Random_Forest.csv",
+        "XGBoost": "Outputs/Top_15_Mitarbeiter_XGBoost.csv"
+    }
+
+    # Ergebnisse der Funktion
     result = compare_model_top_employees(file_paths)
     print(result)
 
