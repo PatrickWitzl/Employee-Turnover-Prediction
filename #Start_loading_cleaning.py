@@ -41,6 +41,8 @@ def start_loading_cleaning():
 end_time = time.time()
 print(f"Analyse abgeschlossen in {end_time - start_time:.2f} Sekunden.")
 
+
+
 # Hauptfunktion starten
 if __name__ == "__main__":
     start_loading_cleaning()

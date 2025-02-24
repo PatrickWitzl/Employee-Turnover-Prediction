@@ -12,8 +12,9 @@ all_pys = [
     "eda_1.py",
     "eda_2_Ausscheiden_2.py",
     "eda_5_Krankheitstage.py",
-    "ML1_2_Fluctuation.py",
-    "ML2_Mitarbeiter_mit_Risiko.py"
+    #"ML1_3_Fluctuation.py",
+    'ML1_Fluctuation_best_model_4_3.py',
+    #"ML2_Mitarbeiter_mit_Risiko.py",
     "Powerpoint_export.py"
 ]
 

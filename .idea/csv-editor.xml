@@ -24,7 +24,56 @@
             </Attribute>
           </value>
         </entry>
+        <entry key="/Outputs/Aggregated_Metrics_6Months_LightGBM.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
         <entry key="/Outputs/Critical_Mitarbeiter.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="/Outputs/Critical_Mitarbeiter_LightGBM.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="/Outputs/Critical_Mitarbeiter_Logistic_Regression.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="/Outputs/Critical_Mitarbeiter_Neural_Network.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="/Outputs/Critical_Mitarbeiter_Random_Forest.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="/Outputs/Critical_Mitarbeiter_XGBoost.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="/Outputs/Model_Comparison_Top_15.csv">
           <value>
             <Attribute>
               <option name="separator" value="," />
@@ -38,7 +87,56 @@
             </Attribute>
           </value>
         </entry>
-        <entry key="/Outputs/Top_15_Mitarbeiter_Last_6_Months.csv">
+        <entry key="/Outputs/Top_15_Mitarbeiter_6Months_LightGBM.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="/Outputs/Top_15_Mitarbeiter_6Months_Random_Forest.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="/Outputs/Top_15_Mitarbeiter_6Months_XGBoost.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="/Outputs/Top_15_Mitarbeiter_LightGBM.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="/Outputs/Top_15_Mitarbeiter_Logistic_Regression.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="/Outputs/Top_15_Mitarbeiter_Neural_Network.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="/Outputs/Top_15_Mitarbeiter_Random_Forest.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="/Outputs/Top_15_Mitarbeiter_XGBoost.csv">
           <value>
             <Attribute>
               <option name="separator" value="," />
@@ -46,6 +144,34 @@
           </value>
         </entry>
         <entry key="/Outputs/Vergleich_Top_15.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="/Outputs/all_models/Top_15_Mitarbeiter_LightGBM.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="/Outputs/all_models/Top_15_Mitarbeiter_Logistic_Regression.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="/Outputs/all_models_6_months/Aggregated_Metrics_6Months_LightGBM.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="/Outputs/all_models_6_months/Top_15_Mitarbeiter_6Months_LightGBM.csv">
           <value>
             <Attribute>
               <option name="separator" value="," />

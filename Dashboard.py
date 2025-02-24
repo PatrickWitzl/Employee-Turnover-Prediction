@@ -13,7 +13,6 @@ color_mapping = {
     "Aktiv": "#1f77b4",  # Blau
     "Ausgeschieden": "#2ca02c",  # Grün
     "Ruhestand": "#ff7f0e",  # Orange
-    "Inaktiv": "#d62728",  # Rot
 }
 
 # App-Konfiguration
@@ -119,16 +118,22 @@ def render_page_1():
             html.Div(
                 className="grid grid-cols-3 gap-4",
                 children=[
-                    html.Div([  # Eingestellte Mitarbeiter
-                        html.H3(id="sum-new-hires", className="text-center text-blue-500 text-lg font-bold"),
+                    # Eingestellte
+                    html.Div([
+                        html.H3(id="sum-new-hires", style={"color": "#1f77b4"},  # Blau
+                                className="text-center text-lg font-bold"),
                         html.P("Eingestellte", className="text-center text-gray-600")
                     ]),
-                    html.Div([  # Ausgeschiedene Mitarbeiter
-                        html.H3(id="sum-exited", className="text-center text-red-500 text-lg font-bold"),
+                    # Ausgeschiedene
+                    html.Div([
+                        html.H3(id="sum-exited", style={"color": "#2ca02c"},  # Rot
+                                className="text-center text-lg font-bold"),
                         html.P("Ausgeschiedene", className="text-center text-gray-600")
                     ]),
-                    html.Div([  # Ruhestand
-                        html.H3(id="sum-retired", className="text-center text-yellow-500 text-lg font-bold"),
+                    # Ruhestand
+                    html.Div([
+                        html.H3(id="sum-retired", style={"color": "#ff7f0e"},  # Orange
+                                className="text-center text-lg font-bold"),
                         html.P("In Ruhestand", className="text-center text-gray-600")
                     ]),
                 ],
@@ -171,7 +176,8 @@ def render_page_1():
 # Inhalte der zweiten Seite (Analysen & Details)
 def render_page_2():
     scatter_fig = px.scatter(df, x="Gehalt", y="Zufriedenheit", color="Status",
-                             title="Zufriedenheit vs. Gehalt nach Status")
+                             title="Zufriedenheit vs. Gehalt nach Status", color_discrete_map=color_mapping
+)
     return html.Div([
         html.H2("Analysen & Details", className="text-center text-blue-600 font-bold text-2xl mb-6"),
 
@@ -195,6 +201,8 @@ def render_page_2():
             ]
         )
     ])
+
+
 
 @app.callback(
     [Output("kpi-avg-salary", "children"),
@@ -267,7 +275,7 @@ def update_kpi_titles(selected_year):
 )
 def update_status_sums(selected_year):
     # Sicherstellen, dass alle erforderlichen Spalten vorhanden sind
-    required_columns = ["Einstellungsdatum", "Austrittsdatum", "Status", "Mitarbeiter_ID"]
+    required_columns = ["Einstellungsdatum", "Austrittsdatum", "Status", "Monat", "Mitarbeiter_ID"]
     for col in required_columns:
         if col not in df.columns:
             raise ValueError(f"Die Spalte '{col}' fehlt im Datensatz.")
@@ -276,7 +284,7 @@ def update_status_sums(selected_year):
     df["Einstellungsdatum"] = pd.to_datetime(df["Einstellungsdatum"], errors="coerce", format="%Y-%m-%d")
     df["Austrittsdatum"] = pd.to_datetime(df["Austrittsdatum"], errors="coerce", format="%Y-%m-%d")
 
-    # Wenn kein Jahr ausgewählt wurde, Standardwerte zurückgeben
+    # Wenn kein Jahr ausgewählt wurde, gebe Standardwerte zurück
     if not selected_year:
         return "kein Jahr gewählt", "kein Jahr gewählt", "kein Jahr gewählt"
 
@@ -287,18 +295,19 @@ def update_status_sums(selected_year):
         ]
     num_new_hires = new_hires_df["Mitarbeiter_ID"].nunique()  # Eindeutige IDs zählen
 
-    # FILTER: Ausgeschiedene
+    # FILTER: Ausgeschiedene (entspricht Filterung in Code 2)
     exited_df = df[
+        (df["Status"] == "Ausgeschieden") &  # Status = Ausgeschieden
         (df["Austrittsdatum"].notna()) &  # Austrittsdatum darf nicht leer sein
         (df["Austrittsdatum"].dt.year == selected_year)  # Austrittsjahr muss dem ausgewählten Jahr entsprechen
         ]
     num_exits = exited_df["Mitarbeiter_ID"].nunique()  # Eindeutige IDs zählen
 
-    # FILTER: Ruhestand
+    # FILTER: Ruhestand (entspricht Filterung in Code 2)
     retired_df = df[
+        (df["Status"] == "Ruhestand") &  # Status = Ruhestand
         (df["Austrittsdatum"].notna()) &  # Austrittsdatum darf nicht leer sein
-        (df["Austrittsdatum"].dt.year == selected_year) &  # Austrittsjahr muss dem ausgewählten Jahr entsprechen
-        (df["Status"] == "Ruhestand")  # Status = 'Ruhestand'
+        (df["Austrittsdatum"].dt.year == selected_year)  # Austrittsjahr muss dem ausgewählten Jahr entsprechen
         ]
     num_retired = retired_df["Mitarbeiter_ID"].nunique()  # Eindeutige IDs zählen
 
@@ -326,7 +335,8 @@ def update_active_monthly_trend(selected_year):
 def update_retired_exited_monthly_trend(selected_year):
     filtered_data = df[(df["Status"].isin(["Ausgeschieden", "Ruhestand"])) & (df["Jahr"] == selected_year)]
     filtered_data = filtered_data.groupby(["Monat", "Status"]).size().reset_index(name="Anzahl")
-    fig = px.line(filtered_data, x="Monat", y="Anzahl", color="Status", title="Trend Ruhestand/Ausgeschieden")
+    fig = px.line(filtered_data, x="Monat", y="Anzahl", color="Status", title="Trend Ruhestand/Ausgeschieden", color_discrete_map=color_mapping
+)
     return fig
 
 
@@ -357,9 +367,29 @@ def update_active_trend(selected_year):
 def update_retired_exited_trend(selected_year):
     filtered_data = df[df["Status"].isin(["Ausgeschieden", "Ruhestand"])]
     filtered_data = filtered_data.groupby(["Jahr", "Status"]).size().reset_index(name="Anzahl")
-    fig = px.line(filtered_data, x="Jahr", y="Anzahl", color="Status", title="Jährliche Trends (ausgeschieden)")
+    fig = px.line(filtered_data, x="Jahr", y="Anzahl", color="Status", title="Jährliche Trends (ausgeschieden)", color_discrete_map=color_mapping
+)
     return fig
 
+@app.callback(
+    Output("interactive-plot", "figure"),  # Ausgabe für die interaktive Grafik
+    Input("analysis-dropdown", "value")  # Eingabe vom Dropdown
+)
+def update_interactive_plot(selected_feature):
+    # Sicherstellen, dass die Auswahl valide ist
+    if selected_feature not in df.columns:
+        return px.scatter(title="Keine gültigen Daten verfügbar")
+
+    # Streudiagramm basierend auf der Auswahl im Dropdown
+    fig = px.histogram(
+        df,
+        x=selected_feature,  # X-Achse basierend auf der ausgewählten Spalte
+        title=f"Häufigkeitsverteilung: {selected_feature}",  # Titel der Grafik
+        color="Status",  # Farbgebung nach 'Status'
+        barmode="group",  # Gruppierte Darstellung der Balken
+        histnorm="percent"  # Prozentuale Darstellung (optional)
+    )
+    return fig
 
 if __name__ == "__main__":
     app.run(debug=True)

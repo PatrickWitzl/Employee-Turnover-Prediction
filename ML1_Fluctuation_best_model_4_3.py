@@ -56,54 +56,61 @@ def load_data(file_path):
 
     return df
 
+import pandas as pd
+from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import OneHotEncoder
+from imblearn.over_sampling import SMOTE
+
+
 def preprocess_data(df):
     """
-    Vorverarbeitung der Daten:
-    - Zielvariable "Fluktuation" ableiten
-    - Feature-Auswahl basierend auf Analyse
-    - One-Hot-Encoding für kategorische Features
-    - Klassenungleichgewicht mit SMOTE behandeln
-    - Anpassung von "Fehlzeiten_Krankheitstage" auf Basis von "Abwesenheitsgrund"
-
-    Args:
-        df (pd.DataFrame): Der Original-Dataframe.
-
-    Returns:
-        pd.DataFrame: Original transformierte Features (X_transformed).
-        pd.DataFrame: Resampled Features (X_resampled).
-        np.ndarray: Zielvariable (y_resampled) nach SMOTE.
-        ColumnTransformer: Preprocessor für spätere Transformationen.
+    Aktualisierte Funktion mit robustem Spaltenzugriff und optimierter Verarbeitung.
     """
-    # Mitarbeiter mit Status "Ruhestand" entfernen
-    df = df.copy()  # Vermeide Original zu modifizieren
+    # Filter mit .loc anwenden, um einen neuen DataFrame zu erstellen
+    df = df.copy()
     df = df[df['Status'] != 'Ruhestand']
-    print(f"Shape nach Entfernen von 'Ruhestand': {df.shape}")
 
-    # Bereinige "Fehlzeiten_Krankheitstage", wenn der "Abwesenheitsgrund" nicht "Krankheit" ist
-    df['Fehlzeiten_Krankheitstage'] = df.apply(
-        lambda row: row['Fehlzeiten_Krankheitstage'] if row['Abwesenheitsgrund'] == "Krankheit" else 0,
-        axis=1
+    # Sicherstellen, dass notwendige Spalten vorhanden sind
+    required_columns = ['Fehlzeiten_Krankheitstage', 'Abwesenheitsgrund', 'Status']
+    for col in required_columns:
+        if col not in df.columns:
+            raise KeyError(f"Die Spalte '{col}' fehlt im DataFrame. Bitte überprüfen Sie die Eingabedaten.")
+
+    # Sicheres Zuweisen in der Spalte "Fehlzeiten_Krankheitstage" mit einer vektorisierten Operation
+    df['Fehlzeiten_Krankheitstage'] = df['Fehlzeiten_Krankheitstage'].where(
+        df['Abwesenheitsgrund'] == "Krankheit", 0
     )
-    # Zielvariable "Fluktuation" ableiten
+
+    # Zielvariable "Fluktuation"
     df['Fluktuation'] = df['Status'].apply(lambda x: 1 if x == "Ausgeschieden" else 0)
 
-    # Features kombinieren (manuelle Auswahl nach Analyse)
+    # Features kombinieren
     selected_features = [
-        'Jahr','Monat', 'Alter', 'Überstunden', 'Fehlzeiten_Krankheitstage',
+        'Jahr', 'Monat', 'Alter', 'Überstunden', 'Fehlzeiten_Krankheitstage',
         'Gehalt', 'Zufriedenheit', 'Fortbildungskosten',
         'Position', 'Geschlecht', 'Standort',
-        'Arbeitszeitmodell', 'Verheiratet',
-        'Kinder', 'Job Role Progression', 'Job Level', 'Tenure'
+        'Arbeitszeitmodell', 'Verheiratet', 'Kinder',
+        'Job Role Progression', 'Job Level', 'Tenure'
     ]
+    # Sicherstellen, dass alle ausgewählten Features vorhanden sind
+    missing_features = [col for col in selected_features if col not in df.columns]
+    if missing_features:
+        raise KeyError(f"Die folgenden Spalten fehlen im DataFrame: {missing_features}")
+
     X = df[selected_features]
     y = df['Fluktuation']
 
-    print(f"Shape von X: {X.shape}")
-    print(f"Shape von y: {y.shape}")
+    print(f"Shape von X vor Transformation: {X.shape}")
 
-    # Kategorische und numerische Spalten erkennen
+    # Kategorische und numerische Spalten auflisten
     categorical_columns = X.select_dtypes(include='object').columns
     numerical_columns = X.select_dtypes(exclude='object').columns
+
+    print("Kategorische Spalten, die durch OneHotEncoding verarbeitet werden:")
+    print(categorical_columns.tolist())
+
+    print("Numerische Spalten, die direkt durch 'passthrough' verarbeitet werden:")
+    print(numerical_columns.tolist())
 
     # Preprocessor definieren
     preprocessor = ColumnTransformer(
@@ -113,28 +120,20 @@ def preprocess_data(df):
         ]
     )
 
-    # Features transformieren
+    # Preprocessing anwenden
     X_transformed = preprocessor.fit_transform(X)
 
-    # Neue Spaltennamen nach Transformation
+    # Kontrolliere die neuen Spaltennamen
     transformed_columns = list(numerical_columns) + \
                           list(preprocessor.named_transformers_['cat'].get_feature_names_out(categorical_columns))
+    print(f"Neue Spalten nach OneHot-Encoding: {len(transformed_columns)} Spalten")
 
-    # In DataFrame zurückschreiben
+    # Rückgabe für weiteren Prozess
     X_transformed = pd.DataFrame(X_transformed, columns=transformed_columns, index=X.index)
 
-    # Synchronisation von df mit X_transformed sicherstellen
-    # Prüfe die Indizes, um sicherzustellen, dass nur relevante Zeilen enthalten sind
-    if not X_transformed.index.equals(df.index):
-        print("Index nicht identisch! Sync wird vorgenommen.")
-        df = df.loc[X_transformed.index]  # Synchronisierung basierend auf dem Index von X_transformed
-
-    # SMOTE für Klassenungleichgewicht
+    # Klassenungleichgewicht durch SMOTE ausgleichen (falls benötigt)
     smote = SMOTE(random_state=42)
     X_resampled, y_resampled = smote.fit_resample(X_transformed, y)
-
-    # Zurück als DataFrame für interpretierbare Spalten
-    X_resampled = pd.DataFrame(X_resampled, columns=X_transformed.columns)
 
     return df, X_transformed, X_resampled, y_resampled, preprocessor
 
@@ -188,34 +187,41 @@ def reduce_dimensions(X_train, X_test, X_full, n_components=0.95):
     Returns:
         Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, PCA]: PCA-Transformation als DataFrames und das PCA-Modell.
     """
-
     try:
-        # Prüfen, ob Pandas-DataFrames verwendet werden
-        is_dataframe = False
-        if isinstance(X_train, pd.DataFrame):
-            is_dataframe = True
-            X_train_columns = X_train.columns  # Spaltennamen sichern
+        # Prüfen, ob Eingaben DataFrames sind
+        is_dataframe = isinstance(X_train, pd.DataFrame)
+
+        if is_dataframe:
+            # Spaltennamen und Index speichern
+            if not (X_train.columns.equals(X_test.columns) and X_train.columns.equals(X_full.columns)):
+                raise ValueError("Die Spalten der Eingaben (X_train, X_test, X_full) sind inkonsistent.")
+
+            X_train_columns = X_train.columns
             index_train, index_test, index_full = X_train.index, X_test.index, X_full.index
-            print(X_train_columns)
+        else:
+            # Sicherstellen, dass alle Eingaben NumPy-Arrays sind
+            if not isinstance(X_train, np.ndarray) or not isinstance(X_test, np.ndarray) or not isinstance(X_full,
+                                                                                                           np.ndarray):
+                raise ValueError("Alle Eingabedaten müssen entweder 'pd.DataFrame' oder 'np.ndarray' sein.")
+            if X_train.shape[1] != X_test.shape[1] or X_train.shape[1] != X_full.shape[1]:
+                raise ValueError("Alle Eingabedatensätze müssen die gleiche Anzahl von Spalten haben.")
 
-        # PCA initialisieren
+        # PCA initialisieren und Trainingsdatensatz fitten
         pca = PCA(n_components=n_components, svd_solver='full')
-
-        # Fit PCA und transformiere Daten
         X_train_pca = pca.fit_transform(X_train)
         X_test_pca = pca.transform(X_test)
         X_full_pca = pca.transform(X_full)
 
-        # Debugging der erklärten Varianz
-        if isinstance(n_components, float):  # Anteil der Varianz als Ziel
+        # Debugging der erklärten Varianz (nur bei Verhältnis)
+        if isinstance(n_components, float):
             variance_explained = np.sum(pca.explained_variance_ratio_) * 100
             print(f"PCA erklärt {variance_explained:.2f}% der Varianz durch {pca.n_components_} Komponenten.")
 
         print(f"PCA erfolgreich abgeschlossen.")
-        print(f"- Originaldimensionen: {X_train.shape[1]}")
-        print(f"- Reduzierte Dimensionen: {X_train_pca.shape[1]}")
+        print(f"- Originaldimensionen vor PCA: {X_train.shape[1]}")
+        print(f"- Reduzierte Dimensionen nach PCA: {X_train_pca.shape[1]}")
 
-        # Falls DataFrames gebraucht wurden, Spaltennamen rekonstruieren
+        # Falls DataFrame, Daten in DataFrame zurückgeben
         if is_dataframe:
             pca_columns = [f"PCA_{i + 1}" for i in range(X_train_pca.shape[1])]
             X_train_pca = pd.DataFrame(X_train_pca, columns=pca_columns, index=index_train)
@@ -227,6 +233,7 @@ def reduce_dimensions(X_train, X_test, X_full, n_components=0.95):
     except Exception as e:
         print(f"Fehler während der PCA-Berechnung: {e}")
         raise
+
 
 def model_selection():
     """
@@ -413,55 +420,52 @@ def train_models(X_train, X_test, y_train, y_test, include_models, use_saved_mod
 
     return trained_models_results
 
-def train_logistic_regression(X_train, X_test, y_train, y_test, use_saved_models, models_dir, pca=None):
+def train_logistic_regression(X_train, X_test, y_train, y_test, use_saved_models, models_dir, use_pca=False):
     """
     Trainiert oder lädt Logistic Regression mit optionaler PCA und behandelt Dimension-Mismatches.
     """
-    model_file = os.path.join(models_dir, 'logistic_regression_with_pca.pkl')
+    model_file = os.path.join(models_dir, 'logistic_regression.pkl')
+    pca_file = os.path.join(models_dir, "pca_model.pkl")
+    pca = None
 
     try:
         # Verzeichnis für Modelle erstellen, falls es nicht existiert
         if not os.path.exists(models_dir):
             os.makedirs(models_dir)
 
+        # PCA nur durchführen, wenn `use_pca=True`
+        if use_pca:
+            print("\n### PCA: Dimensionsreduktion aktiv ###")
+
+            # Prüfen, ob ein PCA-Modell bereits gespeichert ist
+            if os.path.exists(pca_file):
+                print("[INFO] Gespeichertes PCA-Modell gefunden. Laden...")
+                pca = joblib.load(pca_file)
+            else:
+                print("[INFO] PCA-Dimensionalitätsreduktion wird durchgeführt...")
+                pca = PCA(n_components=min(X_train.shape[1], 10))  # Setze 10 Dimensionen als Beispiel
+                pca.fit(X_train)
+
+                # Speichere PCA-Modell
+                joblib.dump(pca, pca_file)
+                print(f"[INFO] PCA-Modell gespeichert: {pca_file}")
+
+            # Anwenden von PCA auf die Trainings- und Testdaten
+            print("[INFO] Anwenden von PCA auf die Daten...")
+            X_train = pca.transform(X_train)
+            X_test = pca.transform(X_test)
+            print(f"[INFO] Shape nach PCA: {X_train.shape}")
+
+        else:
+            print("\n### PCA: Dimensionsreduktion deaktiviert ###")
+
         # Prüfen, ob ein gespeichertes Modell geladen werden soll
         model = None
         if use_saved_models and os.path.exists(model_file):
             print("[INFO] Lade gespeichertes Logistic Regression Modell...")
-            model, loaded_pca = joblib.load(model_file)
+            model = joblib.load(model_file)
 
-            # Prüfen, ob PCA geladen wurde und sollte verwendet werden
-            if pca is None and loaded_pca is not None:
-                print("[INFO] Verwende gespeichertes PCA-Objekt.")
-                pca = loaded_pca
-
-            # Prüfen, ob die Trainingsdaten zu den Modell-Features passen
-            if X_train.shape[1] != model.n_features_in_:
-                print(
-                    f"[WARNUNG] Die Anzahl der Features im Modell ({model.n_features_in_}) stimmt nicht mit den Eingabedaten überein ({X_train.shape[1]}).")
-                print("[INFO] Versuche automatische Anpassung der Features...")
-
-                # Fehlende Spalten ergänzen
-                missing_columns = set(model.feature_names_in_) - set(X_train.columns)
-                for col in missing_columns:
-                    X_train[col] = 0
-                    X_test[col] = 0
-
-                # Zusätzliche Spalten entfernen
-                X_train = X_train[model.feature_names_in_]
-                X_test = X_test[model.feature_names_in_]
-
-        # Anwenden von PCA, falls vorhanden
-        if pca is not None:
-            print("[INFO] PCA auf Eingabedaten anwenden...")
-            if hasattr(pca, "n_components_"):
-                if pca.n_components_ != X_train.shape[1] and model is not None:
-                    raise ValueError(
-                        f"[FEHLER] PCA erzeugt {pca.n_components_} Features, aber das Modell erwartet {model.n_features_in_} Features.")
-            X_train = pca.transform(X_train)
-            X_test = pca.transform(X_test)
-
-        # Falls kein Modell geladen wurde, Training starten
+        # Modelltraining starten, wenn kein gespeichertes Modell vorhanden ist
         if model is None:
             print("[INFO] Kein gespeichertes Modell gefunden. Starte neues Training...")
             param_grid = {
@@ -476,135 +480,85 @@ def train_logistic_regression(X_train, X_test, y_train, y_test, use_saved_models
                 cv=3,
                 n_jobs=-1
             )
-
-            # Training des Modells
-            print("[INFO] Starte GridSearchCV-Suche für Logistic Regression...")
             logreg_pipeline.fit(X_train, y_train)
             model = logreg_pipeline.best_estimator_
             print("[INFO] Training erfolgreich abgeschlossen.")
 
-            # Speichern der Spaltennamen, um Dimension-Mismatches in Zukunft zu vermeiden
-            if isinstance(X_train, pd.DataFrame):
-                model.feature_names_in_ = X_train.columns
-
-            # Modell und PCA-Objekt speichern
-            joblib.dump((model, pca), model_file)
+            # Modell speichern
+            joblib.dump(model, model_file)
             print(f"[INFO] Modell gespeichert: {model_file}")
 
-        # Vorhersagen und Performancemetriken berechnen
-        print("[INFO] Berechne Vorhersagen und Metriken...")
-        y_train_proba = model.predict_proba(X_train)[:, 1]
-        y_test_proba = model.predict_proba(X_test)[:, 1]
-        threshold = 0.5  # Standardmäßiger Schwellenwert
-        y_train_pred = (y_train_proba > threshold).astype(int)
-        y_test_pred = (y_test_proba > threshold).astype(int)
+        # Vorhersagen und Bewertung
+        print("[INFO] Berechnung der Metriken...")
+        y_test_proba = model.predict_proba(X_test)[:, 1]  # Wahrscheinlichkeit für Klasse 1
+        y_test_pred = (y_test_proba > 0.5).astype(int)
 
-        # Performance berechnen
-        accuracy = accuracy_score(y_test, y_test_pred)
-        precision = precision_score(y_test, y_test_pred, zero_division=0)
-        recall = recall_score(y_test, y_test_pred, zero_division=0)
-        f1 = f1_score(y_test, y_test_pred, zero_division=0)
-        roc_auc = roc_auc_score(y_test, y_test_proba)
-
-        result = {
-            "model_name": "Logistic Regression",
-            "trained_model": model,
-            "train_accuracy": accuracy_score(y_train, y_train_pred),
-            "test_accuracy": accuracy,
-            "roc_auc_score": roc_auc,
-            "f1_score": f1,
-            "precision": precision,
-            "recall": recall,
-            "y_test_proba": y_test_proba
+        metrics = {
+            "f1_score": f1_score(y_test, y_test_pred),
+            "roc_auc_score": roc_auc_score(y_test, y_test_proba),
+            "accuracy": accuracy_score(y_test, y_test_pred),
+            "precision": precision_score(y_test, y_test_pred),
+            "recall": recall_score(y_test, y_test_pred)
         }
 
-        # Metriken auf der Konsole ausgeben
-        print(f"\nTrainings-Genauigkeit: {result['train_accuracy']:.4f}")
-        print(f"Test-Genauigkeit: {result['test_accuracy']:.4f}")
-        print(f"ROC-AUC: {result['roc_auc_score']:.4f}")
-        print(f"F1-Score: {result['f1_score']:.4f}")
-        print(f"Präzision: {result['precision']:.4f}")
-        print(f"Recall: {result['recall']:.4f}")
-        print("=" * 24)
+        print("[INFO] Metriken der logistischen Regression:")
+        for metric, value in metrics.items():
+            print(f"  {metric}: {value:.4f}")
 
-        return result
-
-    except FileNotFoundError as fnfe:
-        print(f"[FEHLER] Speicherpfad oder Datei nicht gefunden: {fnfe}")
-        raise
-
-    except ValueError as ve:
-        print(f"[FEHLER] Ungültige Eingabedaten oder Modelle: {ve}")
-        raise
+        return model, pca, metrics
 
     except Exception as e:
-        print(f"[UNERWARTETER FEHLER] {e}")
+        print(f"[FEHLER] {e}")
         raise
 
 def train_random_forest(X_train, X_test, y_train, y_test, use_saved_models, models_dir):
     """
-    Trainiert einen Random Forest Classifier mit anpassbarem Threshold.
-
-    Args:
-        X_train, X_test, y_train, y_test: Trainings- und Test-Daten.
-        use_saved_models: Flag, ob gespeicherte Modelle verwendet werden sollen.
-        models_dir: Pfad zum Speichern der Modelle.
-
-    Returns:
-        dict: Ergebnisdaten, einschließlich trainiertem Modell, Scores und Predictions.
+    Trainiert einen Random Forest Classifier.
     """
-    # Sicherstellen, dass X_train und X_test DataFrames mit identischen Spaltennamen sind
     if isinstance(X_train, pd.DataFrame) and isinstance(X_test, pd.DataFrame):
         if list(X_train.columns) != list(X_test.columns):
             raise ValueError("Die Spalten von X_train und X_test stimmen nicht überein.")
     else:
-        raise TypeError("X_train und X_test müssen DataFrames sein, um Konsistenz sicherzustellen.")
+        raise TypeError("X_train und X_test müssen DataFrames sein.")
 
     model_file = os.path.join(models_dir, 'random_forest_model.pkl')
 
     # Prüfen, ob ein gespeichertes Modell vorhanden ist
     if use_saved_models and os.path.exists(model_file):
         print(f"\nGespeichertes Random Forest-Modell gefunden. Laden...")
-        model = joblib.load(model_file)
+        # Laden des Modells UND der Spaltennamen
+        model, feature_names = joblib.load(model_file)
     else:
         print(f"\nTraining für Random Forest startet...")
         model = RandomForestClassifier(class_weight='balanced', random_state=42)
         model.fit(X_train, y_train)
 
-        # Modell speichern
-        joblib.dump(model, model_file)
+        # Modell und Features speichern
+        feature_names = list(X_train.columns)
+        joblib.dump((model, feature_names), model_file)
         print(f"Random Forest-Modell gespeichert als '{model_file}'")
 
     # Wahrscheinlichkeiten berechnen
     y_train_proba = model.predict_proba(X_train)[:, 1]
     y_test_proba = model.predict_proba(X_test)[:, 1]
 
-    # Schwellenwert (Threshold) für Klassifikation anpassen
-    threshold = 0.5  # Sie können diesen Wert anpassen
+    # Schwellenwert für Klassifikation
+    threshold = 0.5
     y_train_pred = (y_train_proba > threshold).astype(int)
     y_test_pred = (y_test_proba > threshold).astype(int)
 
-    # Zusätzliche Bewertungsmethoden berechnen
+    # Bewertungsergebnisse
     results = {
         "model_name": "Random Forest",
         "trained_model": model,
+        "features": feature_names,  # Feature-Namen zurückgeben
         "train_accuracy": accuracy_score(y_train, y_train_pred),
         "test_accuracy": accuracy_score(y_test, y_test_pred),
         "roc_auc_score": roc_auc_score(y_test, y_test_proba),
         "f1_score": f1_score(y_test, y_test_pred, zero_division=0),
         "precision": precision_score(y_test, y_test_pred, zero_division=0),
         "recall": recall_score(y_test, y_test_pred, zero_division=0),
-        "y_test_proba": y_test_proba  # Falls Wahrscheinlichkeiten gespeichert werden sollen
     }
-
-    # Bewertungsergebnisse ausgeben
-    print(f"\nTrainings-Genauigkeit: {results['train_accuracy']:.4f}")
-    print(f"Test-Genauigkeit: {results['test_accuracy']:.4f}")
-    print(f"ROC-AUC: {results['roc_auc_score']:.4f}")
-    print(f"F1-Score: {results['f1_score']:.4f}")
-    print(f"Präzision: {results['precision']:.4f}")
-    print(f"Recall: {results['recall']:.4f}")
-    print("=" * 24)
 
     return results
 
@@ -1449,7 +1403,8 @@ def get_critical_employees_all_models(models, X_transformed, df, scaler_file="Mo
     # ** Synchronisierung zwischen X_transformed und df **
     if len(X_transformed) != len(df):
         print("WARNUNG: Dimensionen von X_transformed und df stimmen nicht überein. Synchronisiere Daten...")
-        df = df.iloc[:len(X_transformed)].reset_index(drop=True).copy()  # Reduziere df entsprechend X_transformed
+        df = df.iloc[:len(X_transformed)].reset_index(drop=True).copy()
+        assert "Name" in df.columns, "Spalte 'Name' wurde beim Synchronisieren entfernt!"
 
     # ** Iteration über alle Modelle **
     for model_name, model in models.items():
@@ -1463,7 +1418,12 @@ def get_critical_employees_all_models(models, X_transformed, df, scaler_file="Mo
                 if pca is not None:
                     try:
                         print(f"PCA wird für logistische Regression '{model_name}' angewendet...")
+                        meta_columns = df[["Name"]]  # Metadaten-Spalten sichern
                         X_model_transformed = pca.transform(X_transformed)
+                        # Kombination von Metadaten und transformierten Features
+                        df = pd.concat(
+                            [meta_columns.reset_index(drop=True),
+                             pd.DataFrame(X_model_transformed)], axis=1)
                         print(f"PCA-Transformation erfolgreich. Shape: {X_model_transformed.shape}")
                     except Exception as e:
                         print(f"Fehler bei PCA für '{model_name}': {e}. Fortfahren ohne PCA.")
@@ -1478,7 +1438,10 @@ def get_critical_employees_all_models(models, X_transformed, df, scaler_file="Mo
                         print(f"Feature-Namen erfolgreich geladen: {feature_names}")
 
                         # Konvertiere X_transformed in einen DataFrame mit den korrekten Spaltennamen
+                        meta_columns = df[["Name"]]
                         X_model_transformed = pd.DataFrame(X_transformed, columns=feature_names)
+                        X_model_transformed = pd.concat([meta_columns.reset_index(drop=True),
+                                                         X_model_transformed], axis=1)
                     except Exception as e:
                         print(f"Fehler beim Laden oder Anwenden der Feature-Namen für '{model_name}': {e}")
                         results[model_name] = (None, None)
@@ -1506,6 +1469,7 @@ def get_critical_employees_all_models(models, X_transformed, df, scaler_file="Mo
             df_copy = df.copy()
             try:
                 df_copy["Fluktuationswahrscheinlichkeit"] = y_proba * 100
+                assert "Name" in df_copy.columns, "Spalte 'Name' wurde beim Hinzufügen von Wahrscheinlichkeiten entfernt!"
             except Exception as e:
                 print(f"Fehler beim Hinzufügen der Fluktuationswahrscheinlichkeit für '{model_name}': {e}")
                 results[model_name] = (None, None)
@@ -1517,11 +1481,12 @@ def get_critical_employees_all_models(models, X_transformed, df, scaler_file="Mo
                 (df_copy["Monat"] == max_month_in_max_year) &
                 (df_copy["Jahr"] == max_year)
                 ]
-            print(f"Shape nach Filtern aktiver Mitarbeiter: {df_copy.shape}")
+            assert "Name" in df_copy.columns, "Spalte 'Name' wurde nach Filterung entfernt!"
 
             # Kritische Mitarbeiter auswählen
             critical_employees = df_copy[df_copy["Fluktuationswahrscheinlichkeit"] > threshold].sort_values(
                 by="Fluktuationswahrscheinlichkeit", ascending=False)
+            assert "Name" in critical_employees.columns, "Spalte 'Name' wurde bei der Auswahl kritischer Mitarbeiter entfernt!"
 
             # Dubletten anhand der Mitarbeiter_ID entfernen
             if "Mitarbeiter_ID" in critical_employees.columns:
@@ -1530,9 +1495,11 @@ def get_critical_employees_all_models(models, X_transformed, df, scaler_file="Mo
                     print(
                         f"Warnung: {duplicate_count} doppelte Einträge basierend auf 'Mitarbeiter_ID' wurden entfernt.")
                     critical_employees = critical_employees.drop_duplicates(subset=["Mitarbeiter_ID"])
+                    assert "Name" in critical_employees.columns, "Spalte 'Name' wurde nach Dublettenentfernung entfernt!"
 
             # Top 15 kritische Mitarbeiter auswählen
             top_15 = critical_employees.head(15)
+            assert "Name" in top_15.columns, "Spalte 'Name' wurde in den Top-15-Ergebnissen entfernt!"
 
             # Ergebnisse speichern
             results[model_name] = (critical_employees, top_15)
@@ -1540,159 +1507,6 @@ def get_critical_employees_all_models(models, X_transformed, df, scaler_file="Mo
         except Exception as e:
             print(f"Fehler bei Modell '{model_name}': {e}")
             results[model_name] = (None, None)
-
-    return results
-
-def get_critical_employees_all_models_6_months(models, X_transformed, df, scaler_file="Models/scaler.pkl",
-                                               feature_names_file="Models/lightgbm_feature_names.pkl", pca=None,
-                                               threshold=0.0):
-    """
-    Identifiziert kritische Mitarbeiter (Fluktuationswahrscheinlichkeit > Schwelle),
-    unter Berücksichtigung der letzten 6 Monate und optionaler PCA. Berechnet
-    zusätzliche Metriken (Durchschnitt, Maximalwert der Wahrscheinlichkeit) durch Monatsweise Analyse.
-
-    Args:
-        model: Das trainierte Modell für die Vorhersage.
-        X_transformed (np.ndarray): Die preprocessierten Features (unskaliert vor Skalierung).
-        df (pd.DataFrame): Der DataFrame mit zusätzlichen Informationen (Monat, Jahr, etc.).
-        scaler_file (str): Dateiname des gespeicherten Scalers.
-        feature_names_file (str): Optional, Pfad zu LightGBM-Feature-Namen.
-        pca (PCA, optional): Ein optionales PCA-Objekt für Dimensionenreduktion.
-        threshold (float): Schwellenwert für Fluktuationswahrscheinlichkeit in Prozent.
-
-    Returns:
-        pd.DataFrame: Aggregierte Ergebnisse für Fluktuationsmetriken pro Mitarbeiter.
-    """
-    results = {}
-    print(f"Shape von X_transformed: {X_transformed.shape}")
-    print(f"Shape von df: {df.shape}")
-
-    # ** Dynamisch die letzten 6 Monate berechnen **
-    max_year = df["Jahr"].max()
-    max_month = df[df["Jahr"] == max_year]["Monat"].max()
-
-    # Letzte 6 Monate bestimmen
-    recent_months = []
-    for i in range(6):
-        month = max_month - i
-        year = max_year
-        if month <= 0:  # Rückschritt ins Vorjahr
-            month += 12
-            year -= 1
-        recent_months.append((year, month))
-
-    print(f"Berücksichtigte Monate (letzte 6 Monate): {recent_months}")
-
-    # ** Scaler laden und Testdaten skalieren **
-    try:
-        print(f"Lade Scaler aus '{scaler_file}'...")
-        scaler = joblib.load(scaler_file)
-        X_transformed = scaler.transform(X_transformed)
-        print("Testdaten erfolgreich skaliert.")
-    except FileNotFoundError:
-        raise FileNotFoundError(f"Scaler-Datei '{scaler_file}' nicht gefunden.")
-    except Exception as e:
-        raise RuntimeError(f"Fehler beim Skalieren der Daten: {e}")
-
-    # ** Synchronisation prüfen **
-    if len(X_transformed) != len(df):
-        raise ValueError("Die Dimensionen von X_transformed und df stimmen nicht überein.")
-    df = df.reset_index(drop=True).copy()
-
-    # ** Iteration über alle Modelle **
-    for model_name, model in models.items():
-        print(f"\nBearbeite Modell: {model_name}")
-        try:
-            X_model_transformed = X_transformed
-
-            # ** LightGBM: Feature-Namen laden und anwenden **
-            if isinstance(model, lgb.LGBMClassifier) and feature_names_file:
-                try:
-                    with open(feature_names_file, 'rb') as f:
-                        feature_names = joblib.load(f)
-                    print(f"Feature-Namen erfolgreich geladen: {feature_names}")
-
-                    # X_transformed in DataFrame mit den korrekten Namen konvertieren
-                    X_model_transformed = pd.DataFrame(X_transformed, columns=feature_names)
-                except Exception as e:
-                    print(f"Fehler beim Laden der Feature-Namen für '{model_name}': {e}")
-                    results[model_name] = None
-                    continue
-
-            # ** Optional: PCA anwenden **
-            if pca is not None and isinstance(model, LogisticRegression):
-                try:
-                    print(f"PCA wird für '{model_name}' angewendet...")
-                    X_model_transformed = pca.transform(X_model_transformed)
-                    print(f"PCA erfolgreich angewendet. Shape: {X_model_transformed.shape}")
-                except Exception as e:
-                    print(f"Fehler bei PCA für '{model_name}': {e}. Fortfahren ohne PCA.")
-
-            # ** Daten für die letzten 6 Monate sammeln **
-            monthly_probabilities = []
-            for year, month in recent_months:
-                print(f"Verarbeite Monat {month}/{year}...")
-                monthly_data = df[(df["Jahr"] == year) & (df["Monat"] == month)]
-
-                if monthly_data.empty:
-                    print(f"Keine Daten für {month}/{year}. Überspringen...")
-                    continue
-
-                indices = monthly_data.index
-
-                # X-Daten für den Monat selektieren
-                try:
-                    if isinstance(X_model_transformed, pd.DataFrame):
-                        monthly_X = X_model_transformed.loc[indices]
-                    else:
-                        monthly_X = X_model_transformed[indices, :]
-
-                    # Wahrscheinlichkeiten berechnen
-                    if hasattr(model, "predict_proba"):
-                        monthly_proba = model.predict_proba(monthly_X)[:, 1]
-                    elif hasattr(model, "predict"):
-                        monthly_proba = model.predict(monthly_X).flatten()
-                    else:
-                        print(f"Modell '{model_name}' unterstützt keine probabilistischen Vorhersagen.")
-                        break
-
-                    monthly_data = monthly_data.copy()
-                    monthly_data["Fluktuationswahrscheinlichkeit"] = np.minimum(monthly_proba * 100, 100)  # Max 100%
-                    monthly_probabilities.append(monthly_data)
-                except Exception as e:
-                    print(f"Fehler für {month}/{year}: {e}")
-                    continue
-
-            # ** Monatliche Ergebnisse kombinieren **
-            if not monthly_probabilities:
-                print(f"Keine Daten für '{model_name}' in den letzten 6 Monaten.")
-                results[model_name] = None
-                continue
-
-            combined_data = pd.concat(monthly_probabilities, ignore_index=True)
-
-            # ** Aggregierte Metriken pro Mitarbeiter berechnen **
-            try:
-                metrics = combined_data.groupby("Mitarbeiter_ID").agg(
-                    Durchschnitt=("Fluktuationswahrscheinlichkeit", "mean"),
-                    Maximum=("Fluktuationswahrscheinlichkeit", "max")
-                ).reset_index()
-            except Exception as e:
-                print(f"Fehler bei der Metrikberechnung für '{model_name}': {e}")
-                results[model_name] = None
-                continue
-
-            # ** Ergebnisse speichern **
-            metrics = metrics.sort_values(by=["Maximum", "Durchschnitt"], ascending=False)
-            top_15 = metrics.head(15)  # Top 15 Einträge
-            results[model_name] = {
-                "gesamt": metrics,
-                "top_15": top_15
-            }
-
-        except Exception as e:
-            print(f"Fehler bei Verarbeitung des Modells '{model_name}': {e}")
-            results[model_name] = None
 
     return results
 
@@ -1707,16 +1521,16 @@ def save_results(data, file_name_base, output_dir):
         output_dir (str): Zielverzeichnis für die Speicherung.
     """
     csv_path = os.path.join(output_dir, f"{file_name_base}.csv")
-    xlsx_path = os.path.join(output_dir, f"{file_name_base}.xlsx")
+    #xlsx_path = os.path.join(output_dir, f"{file_name_base}.xlsx")
 
     # Daten exportieren
     data.to_csv(csv_path, index=False)
-    data.to_excel(xlsx_path, index=False)
+    #data.to_excel(xlsx_path, index=False)
 
     # Feedback an den Nutzer
     print(f"\nDaten '{file_name_base}' wurden erfolgreich gespeichert:")
     print(f"- CSV: {csv_path}")
-    print(f"- Excel: {xlsx_path}")
+    #print(f"- Excel: {xlsx_path}")
 
 def compare_model_top_employees(file_paths, output_file="Outputs/Vergleich_Top_15.csv"):
     """
@@ -1749,7 +1563,7 @@ def compare_model_top_employees(file_paths, output_file="Outputs/Vergleich_Top_1
                 )
 
             # Ergänze das Modell in den Daten
-            df = df[["Name", "Fluktuationswahrscheinlichkeit"]].copy()
+            df = df[["Name", "Mitarbeiter_ID","Fluktuationswahrscheinlichkeit"]].copy()
 
             # Fluktuationswahrscheinlichkeit in Prozent umrechnen
             df["Fluktuationswahrscheinlichkeit"] = df["Fluktuationswahrscheinlichkeit"]
@@ -1791,84 +1605,18 @@ def compare_model_top_employees(file_paths, output_file="Outputs/Vergleich_Top_1
 
     return combined_df
 
-def compare_model_top_employees(file_paths, output_file="Outputs/Model_Comparison_Top_15.csv"):
-    """
-    Vergleicht die Top-15-Mitarbeiter aus verschiedenen Modellen in Bezug auf ihre Fluktuationswahrscheinlichkeiten.
-    Die Ergebnisse werden zusammengeführt, Häufigkeiten berechnet und eine kompakte Ausgabe erstellt.
-
-    Args:
-        file_paths (dict): Dictionary mit Modellnamen als Key und Datei-Pfaden als Value.
-        output_file (str): Pfad zur Ausgabedatei.
-
-    Returns:
-        pd.DataFrame: Zusammengeführte und aggregierte Ergebnisse.
-    """
-    # Initialisiere eine Dictionary, um die Daten pro Modell nach dem Import abzulegen
-    model_data = {}
-
-    # Lade die Daten aus den CSV-Dateien
-    print("Lade Top-15-Daten aus den Modellen...")
-    for model_name, file_path in file_paths.items():
-        try:
-            print(f"Lade Daten für Modell: {model_name} aus {file_path}")
-            df = pd.read_csv(file_path)  # Lade die CSV-Datei
-
-            # Sicherstellen, dass die erforderlichen Spalten vorhanden sind
-            required_columns = {"Name", "Fluktuationswahrscheinlichkeit"}
-            if not required_columns.issubset(df.columns):
-                raise ValueError(f"Die Datei '{file_path}' enthält nicht die erforderlichen Spalten.")
-
-            # Füge die Modellinformationen den Daten hinzu
-            df = df[["Name", "Fluktuationswahrscheinlichkeit"]].copy()
-            df.rename(columns={"Fluktuationswahrscheinlichkeit": f"Fluktuation_{model_name} (%)"}, inplace=True)
-            model_data[model_name] = df
-
-        except Exception as e:
-            print(f"Fehler beim Laden von '{file_path}': {e}")
-            continue
-
-    # Zusammenführen der Daten aus allen Modellen
-    print("\nKombiniere Daten aus allen Modellen...")
-    combined_df = None
-    for model_name, df in model_data.items():
-        if combined_df is None:
-            combined_df = df
-        else:
-            combined_df = pd.merge(combined_df, df, on="Name", how="outer")
-
-    # Zähle, wie oft jeder Name in den Modellen vorkommt
-    print("\nZähle, wie oft jeder Name in den Modellen aufgenommen wurde...")
-    combined_df["Häufigkeit_in_Modellen"] = combined_df.notna().sum(axis=1) - 1  # Ignoriere 'Name'-Spalte
-
-    # Übereinstimmung basierend auf Häufigkeit erstellen
-    combined_df["Übereinstimmung"] = combined_df["Häufigkeit_in_Modellen"] > 1
-
-    # Sortiere nach Namen alphabetisch
-    combined_df.sort_values("Name", inplace=True)
-
-    # Speichere die Ergebnisse in eine CSV-Datei
-    print(f"Speichere die kombinierten Ergebnisse in '{output_file}'...")
-    try:
-        combined_df.to_csv(output_file, index=False)
-        print("Ergebnisse erfolgreich gespeichert.")
-    except Exception as e:
-        print(f"Fehler beim Speichern der Datei: {e}")
-
-    return combined_df
-
-
-# Hauptlogik für Fluktuationsanalyse und Modelltraining
 def main():
     """
-    Hauptlogik für die Fluktuationsanalyse und das Modelltraining.
-    """
+      Hauptlogik für die Fluktuationsanalyse und das Modelltraining.
+      """
     plot_dir = "Plots"
     models_dir = "Models"
     output_dir = "Outputs"
+    output_dir_all = "Outputs/all_models"
     os.makedirs(plot_dir, exist_ok=True)  # Verzeichnis für Plots erstellen
     os.makedirs(models_dir, exist_ok=True)
     os.makedirs(output_dir, exist_ok=True)
-    # Verzeichnis erstellen, falls nicht vorhanden
+    os.makedirs(output_dir_all, exist_ok=True)
 
     # 1. Daten laden und vorbereiten
     print("\n### Schritt 1: Daten laden ###")
@@ -1881,49 +1629,60 @@ def main():
     try:
         df = load_data(file_path)
         print("Daten laden abgeschlossen.")
-
     except Exception as e:
         print(f"Fehler beim Laden der Daten: {e}")
         return
 
-    # 2. Daten vorverarbeiten (Preprocessing: One-Hot-Encoding und SMOTE)
-    # Funktion entfernt 'Status', erstellt 'Fluktuation'
+    # 2. Daten vorverarbeiten
     print("\n### Schritt 2: Daten vorverarbeiten ###")
     print("Daten vorverarbeiten...")
     df, X_transformed, X_resampled, y_resampled, preprocessor = preprocess_data(df)
     print(f"Shape von X_transformed: {X_transformed.shape}")
     print(f"Shape von df (Originaldaten): {df.shape}")
-    print("Preprocessing abgeschlossen.")
 
-    # 3. Daten aufteilen und skalieren (Training/Test-Sets erstellen und skalieren)
+    # 3. Daten aufteilen und skalieren
     print("\n### Schritt 3: Daten aufteilen und skalieren ###")
-    print("Daten aufteilen und skalieren...")
     X_train, X_test, y_train, y_test, scaler = split_and_scale(X_resampled, y_resampled)
     print(f"Shape von X_train_scaled: {X_train.shape}")
     print(f"Shape von X_test_scaled: {X_test.shape}")
-    print("Datenaufteilung und Skalierung abgeschlossen.")
 
-    # 4. PCA-Dimensionalitätsreduktion anwenden (auf Trainings-, Test- und Gesamtdaten)
-    print("\n### Schritt 4: PCA-Dimensionalitätsreduktion ###")
-    pca_file = os.path.join(models_dir, "pca_model.pkl")
-    if os.path.exists(pca_file):
-        print("Gespeichertes PCA-Modell gefunden. Laden...")
-        pca = joblib.load(pca_file)
+    # 4. Option zur Aktivierung von PCA
+    use_pca = True  # Setze auf `True` oder `False`, um PCA ein- oder auszuschalten
 
-        # Transformieren der existierenden Daten
-        X_train_pca = pca.transform(X_train)
-        X_test_pca = pca.transform(X_test)
-        X_full_pca = pca.transform(X_resampled)
+    # Variablen vorbereiten, um PCA-transformierte Daten zu speichern
+    X_train_pca = X_train
+    X_test_pca = X_test
+    X_resampled_pca = X_resampled
+    X_transformed_pca = X_transformed
 
+    if use_pca:
+        print("\n### Schritt 4: PCA-Dimensionalitätsreduktion aktiv ###")
+        pca_file = os.path.join(models_dir, "pca_model.pkl")
+
+        if os.path.exists(pca_file):
+            print("Gespeichertes PCA-Modell gefunden. Laden...")
+            pca = joblib.load(pca_file)
+
+            # Transformieren der existierenden Daten
+            X_train_pca = pca.transform(X_train)
+            X_test_pca = pca.transform(X_test)
+            X_resampled_pca = pca.transform(X_resampled)
+            X_transformed_pca = pca.transform(X_transformed)
+        else:
+            print("PCA-Dimensionalitätsreduktion durchführen...")
+            X_train_pca, X_test_pca, X_resampled_pca, pca = reduce_dimensions(X_train, X_test, X_resampled)
+
+            # Speichern der PCA-Transformation
+            try:
+                joblib.dump(pca, pca_file)
+                print(f"PCA-Modell gespeichert: {pca_file}")
+            except Exception as e:
+                print(f"Warnung: PCA-Modell konnte nicht gespeichert werden. {e}")
+        # Shape der Daten nach PCA anzeigen
+        print(f"Shape nach PCA: {X_train_pca.shape}")
     else:
-        print("PCA-Dimensionalitätsreduktion durchführen...")
-        X_train_pca, X_test_pca, X_full_pca, pca = reduce_dimensions(X_train, X_test, X_resampled)
-
-        # Speichern der PCA-Transformation
-        joblib.dump(pca, pca_file)
-        print(f"PCA-Modell gespeichert: {pca_file}")
-    print(f"Shape nach PCA: {X_full_pca.shape}")
-    print("PCA abgeschlossen.")
+        print("\n### Schritt 4: PCA-Dimensionalitätsreduktion deaktiviert ###")
+        pca = None  # Bei deaktivierter PCA bleibt dieser Wert `None`
 
     # 5. Modellauswahl basierend auf den Anforderungen
     print("\n### Schritt 5: Modellauswahl ###")
@@ -1935,7 +1694,7 @@ def main():
     else:
         print(f"Ausgewählte Modelle: {', '.join(include_models)}")
 
-    #6. Benutzerwahl abfragen
+    # 6. Benutzerwahl abfragen
     print("\n### Schritt 6 Wählen: Gespeicherte Modelle oder neues Training ###")
     use_saved_models = get_user_choice(models_dir)
 
@@ -1943,21 +1702,33 @@ def main():
     print("\n### Schritt 7: Modelle trainieren ###")
     print("Modelle trainieren...")
 
-    # Modelle trainieren oder laden
+    # Übergebe die richtigen Daten (PCA-oder Nicht-PCA-Versionen)
     trained_models_results = train_models(
-        X_train, X_test, y_train, y_test, include_models, use_saved_models, models_dir)
+        X_train=X_train_pca,
+        X_test=X_test_pca,
+        y_train=y_train,
+        y_test=y_test,
+        include_models=include_models,
+        use_saved_models=use_saved_models,
+        models_dir=models_dir
+    )
 
     # Sicherstellen, dass Ergebnisse verfügbar sind
     if not trained_models_results or len(trained_models_results) == 0:
-        # Überprüfen, ob Modelle überhaupt existieren
         if use_saved_models:
             print("WARNUNG: Gespeicherte Modelle wurden angefordert, aber es gibt keine gespeicherten Modelle.")
             print("Starte neues Training...")
             use_saved_models = False  # Umschalten auf Training neuer Modelle
             trained_models_results = train_models(
-                X_train_pca, X_test_pca, y_train, y_test, include_models, use_saved_models, models_dir)
+                X_train=X_train_pca,
+                X_test=X_test_pca,
+                y_train=y_train,
+                y_test=y_test,
+                include_models=include_models,
+                use_saved_models=use_saved_models,
+                models_dir=models_dir
+            )
 
-        # Nach erneutem Versuch prüfen, ob Training erfolgreich war
         if not trained_models_results or len(trained_models_results) == 0:
             print("FEHLER: Keine Modelle wurden erfolgreich trainiert oder geladen. Programm wird beendet.")
             return
@@ -1968,24 +1739,20 @@ def main():
     nn_model = None  # Haltemechanismus für Neural Network-Modell, falls vorhanden
 
     for result in trained_models_results:
-        # Model spezifisch prüfen
         model_name = result.get("model_name")
         trained_model = result.get("trained_model")
         roc_auc_score_nn = result.get("y_test_proba", None)
 
-        # Speichern des Modells
         if model_name and trained_model:
             models[model_name] = trained_model
 
-        # Für Neural Network Wahrscheinlichkeiten speziell speichern
         if model_name == "Neural Network":
-            nn_model = trained_model  # Setzt das neuronale Modell
+            nn_model = trained_model
             if roc_auc_score_nn is not None:
-                y_probas["Neural Network"] = result["y_test_proba"]  # Speichern der ROC-Wahrscheinlichkeit
+                y_probas["Neural Network"] = result["y_test_proba"]
         else:
-            y_probas[model_name] = result.get("roc_auc_score")  # Für andere Modelle prüfen: ROC direkt speichern
+            y_probas[model_name] = result.get("roc_auc_score")
 
-    # Prüfen, ob überhaupt ein Modell trainiert wurde
     if not models:
         print("WARNUNG: Keine Modelle stehen für die Analyse bereit.")
         return  # Kein Modell - Abbruch
@@ -1994,21 +1761,16 @@ def main():
 
     # 8. Analyse von Overfitting/Underfitting
     print("\n### Schritt 8: Over-/Underfitting-Analyse und Plots erstellen ###")
+    model_names = [result["model_name"] for result in trained_models_results]
+    train_accuracies = [result["train_accuracy"] for result in trained_models_results]
+    test_accuracies = [result["test_accuracy"] for result in trained_models_results]
+    roc_auc_scores = [result["roc_auc_score"] for result in trained_models_results]
 
-    # Variablen definieren
-    model_names = [result["model_name"] for result in trained_models_results]  # Namen der Modelle
-    train_accuracies = [result["train_accuracy"] for result in trained_models_results]  # Trainingsgenauigkeiten
-    test_accuracies = [result["test_accuracy"] for result in trained_models_results]  # Testgenauigkeiten
-    roc_auc_scores = [result["roc_auc_score"] for result in trained_models_results]  # ROC AUC-Werte
+    f1_scores = [result.get("f1_score", None) for result in trained_models_results]
+    precisions = [result.get("precision", None) for result in trained_models_results]
+    recalls = [result.get("recall", None) for result in trained_models_results]
 
-    # Zusätzliche Metriken optional extrahieren
-    f1_scores = [result.get("f1_score", None) for result in trained_models_results]  # Optional: F1-Scores
-    precisions = [result.get("precision", None) for result in trained_models_results]  # Optional: Präzision
-    recalls = [result.get("recall", None) for result in trained_models_results]  # Optional: Recall-Werte
-
-
-    # Horizontales Balkendiagramm für Modellvergleiche erstellen
-    print(print("\nHorizontales Balkendiagramm für Modellvergleiche erstellen ..."))
+    print("\nHorizontales Balkendiagramm für Modellvergleiche erstellen ...")
     plot_horizontal_comparison(
         model_names=model_names,
         train_accuracies=train_accuracies,
@@ -2018,88 +1780,66 @@ def main():
         precisions=precisions,
         recalls=recalls,
         plot_dir=plot_dir,
-        sort_by="Test Accuracy",  # Sortieren nach Testgenauigkeit
-        include_train=True,  # Trainingsgenauigkeiten einbeziehen
+        sort_by="Test Accuracy",
+        include_train=True,
         xlabel="Model Performance (Higher is Better)"
     )
     print("Horizontale Plots wurden erfolgreich erstellt.")
 
-    # Over-/Underfitting testen und Ergebnisse visualisieren
     print("\nAnalyse von Overfitting und Underfitting ...")
     fit_results = test_under_over_fit(model_names, train_accuracies, test_accuracies)
     plot_under_over_fit(model_names, train_accuracies, test_accuracies, plot_dir)
     print("Over-/Underfitting-Ergebnisse:")
     print(fit_results)
 
-
-
     # 9. ROC-Kurven für alle Modelle erstellen
     print("\n### Schritt 9: ROC-Kurven erstellen ###")
-    print("ROC-Kurven erstellen...")
     try:
-        # Dictionary `models` enthält alle trainierten Modelle
-        # Dictionary `y_probas` enthält die Wahrscheinlichkeiten
-
-        # Aufruf der ROC-Plot-Funktion
         plot_combined_roc_curves(
             models=models,
-            X_test=X_test,
+            X_test=X_test_pca if use_pca else X_test,
             y_test=y_test,
-            nn_model=nn_model,  # Das neuronale Netzwerk-Modell
-            y_proba_nn=y_probas.get("Neural Network", None),  # Wahrscheinlichkeiten für nn
+            nn_model=nn_model,
+            y_proba_nn=y_probas.get("Neural Network", None),
             plot_dir=plot_dir
         )
-
     except Exception as e:
         print(f"Fehler bei der Erstellung der ROC-Kurven: {e}")
 
     # 10. Modelle bewerten
     print("\n### Schritt 10: Modellbewertung ###")
-    print("Modelle bewerten...")
-    # Übergabe der PCA-Daten zusätzlich an die Funktion
     evaluation_results = evaluate_models(
         models=models,
-        X_test=X_test,  # Original-Testdaten
-        y_test=y_test,  # Wahre Labels
-        plot_dir=plot_dir  # Verzeichnis für Plots
+        X_test=X_test_pca if use_pca else X_test,
+        y_test=y_test,
+        plot_dir=plot_dir
     )
 
     # 11. Bestes Modell auswählen
     print("\n### Schritt 11: Modellauswahl ###")
-    print("\nBestes Modell auswählen...")
     try:
-        best_model, best_model_name = get_best_model(models, evaluation_results, fit_results, primary_metric="ROC-AUC",
-                                                     tie_breaker="F1-Score")
+        best_model, best_model_name = get_best_model(
+            models=models,
+            evaluation_results=evaluation_results,
+            fit_results=fit_results,
+            primary_metric="ROC-AUC",
+            tie_breaker="F1-Score"
+        )
         print(f"\nDas beste Modell ist: {best_model_name}")
     except ValueError as e:
         print(f"Fehler bei der Modellauswahl: {e}")
         return
 
-    # 12. Kritische Mitarbeiter und Top 15 ermitteln
+    # 12. Kritische Mitarbeiter ermitteln
     print("\n### Schritt 12: Kritische Mitarbeiter und Top 15 ermitteln ###")
-    print("Kritische Mitarbeiter und Top 15 ermitteln...")
     try:
-        # Überprüfen, ob PCA angewendet werden soll (z. B. für die logistische Regression)
-        apply_pca = best_model_name == "Logistic Regression"  # PCA nur bei log. Regression anwenden
-
-        # Funktionsaufruf, mit oder ohne PCA, abhängig vom Modell
         critical_employees, top_15_mitarbeiter = get_critical_employees(
             best_model,
-            X_transformed,
-            df,
-            pca=pca if apply_pca else None  # PCA nur übergeben, wenn logistische Regression
+            X_transformed=X_transformed_pca if use_pca else X_transformed,
+            df=df,
+            pca=pca if best_model_name == "Logistic Regression" else None
         )
-
-        if critical_employees.empty:
-            print("WARNUNG: Keine kritischen Mitarbeiter gefunden (keine Wahrscheinlichkeiten > 70%).")
-        else:
-            print(f"Anzahl der kritischen Mitarbeiter: {len(critical_employees)}")
-
-        if top_15_mitarbeiter.empty:
-            print("WARNUNG: Keine Top 15 Mitarbeiter gefunden.")
-        else:
-            print(
-                f"Top 15 Mitarbeiter:\n{top_15_mitarbeiter[['Mitarbeiter_ID', 'Name', 'Fluktuationswahrscheinlichkeit']]}")
+        # Validierungen und Ausgaben
     except Exception as e:
         print(f"Fehler beim Ermitteln der kritischen Mitarbeiter: {e}")
         return
@@ -2113,15 +1853,19 @@ def main():
             try:
                 print(f"\nBearbeite Modell: {model_name}")
 
-                apply_pca = model_name == "Logistic Regression"  # Prüfen, ob PCA erforderlich ist
+                # Prüfe, ob PCA erforderlich ist
+                apply_pca = use_pca and model_name == "Logistic Regression"
+
+                # Wähle die richtigen Daten (PCA oder original)
+                current_X_transformed = X_transformed_pca if apply_pca else X_transformed
+                current_pca = pca if apply_pca else None
 
                 # Funktionsaufruf für kritische Mitarbeiter
-                # Übergib die Modelle als Dictionary mit nur dem aktuellen Modell
                 critical_employees_data = get_critical_employees_all_models(
-                    models={model_name: models[model_name]},  # Nur das aktuelle Modell verarbeiten
-                    X_transformed=X_transformed,
+                    models={model_name: models[model_name]},
+                    X_transformed=current_X_transformed,
                     df=df,
-                    pca=pca if apply_pca else None
+                    pca=current_pca
                 )
 
                 # Ergebnisse extrahieren
@@ -2145,12 +1889,12 @@ def main():
                     save_results(
                         data=critical_employees,
                         file_name_base=f"Critical_Mitarbeiter_{model_name.replace(' ', '_')}",
-                        output_dir=output_dir
+                        output_dir=output_dir_all
                     )
                     save_results(
                         data=top_15_employees,
                         file_name_base=f"Top_15_Mitarbeiter_{model_name.replace(' ', '_')}",
-                        output_dir=output_dir
+                        output_dir=output_dir_all
                     )
                 else:
                     print(f"WARNUNG: Keine Ergebnisse für {model_name} vorhanden.")
@@ -2163,69 +1907,7 @@ def main():
     except Exception as e:
         print(f"Fehler beim Ermitteln der kritischen Mitarbeiter und Top 15 für alle Modelle: {e}")
 
-    # 14. Kritische Mitarbeiter und Top 15 über die letzten 6 Monate für jedes Modell ermitteln
-    print("\n### Schritt 14: Kritische Mitarbeiter und Top 15 über die letzten 6 Monate ermitteln ###")
-    print("Kritische Mitarbeiter und Top 15 über die letzten 6 Monate ermitteln...")
-
-    try:
-        for model_name in include_models_all:  # Verwende die Modellnamen aus der Auswahl
-            try:
-                print(f"\nBearbeite Modell: {model_name}")
-
-                apply_pca = model_name == "Logistic Regression"  # Prüfen, ob PCA erforderlich ist
-
-                # Funktionsaufruf für kritische Mitarbeiter über die letzten 6 Monate
-                critical_employees_6_months_data = get_critical_employees_all_models_6_months(
-                    models={model_name: models[model_name]},  # Nur das aktuelle Modell übergeben
-                    X_transformed=X_transformed,
-                    df=df,
-                    pca=pca if apply_pca else None
-                )
-
-                # Ergebnisse extrahieren
-                if model_name in critical_employees_6_months_data:
-                    aggregated_metrics = critical_employees_6_months_data[model_name]["gesamt"]
-                    top_15_employees = critical_employees_6_months_data[model_name]["top_15"]
-
-                    # Ergebnisse validieren und anzeigen
-                    if aggregated_metrics.empty:
-                        print(
-                            f"WARNUNG: Keine kritischen Mitarbeiter für {model_name} in den letzten 6 Monaten gefunden.")
-                    else:
-                        print(
-                            f"Anzahl der kritischen Mitarbeiter für {model_name} über die letzten 6 Monate: {len(aggregated_metrics)}")
-                        print(aggregated_metrics.head(5))
-
-                    if top_15_employees.empty:
-                        print(f"WARNUNG: Keine Top 15 Mitarbeiter für {model_name} in den letzten 6 Monaten gefunden.")
-                    else:
-                        print(f"Top 15 Mitarbeiter (über die letzten 6 Monate) für {model_name}:\n"
-                              f"{top_15_employees[['Mitarbeiter_ID', 'Durchschnitt', 'Maximum']]}")
-
-                    # Ergebnisse speichern
-                    save_results(
-                        data=aggregated_metrics,
-                        file_name_base=f"Aggregated_Metrics_6Months_{model_name.replace(' ', '_')}",
-                        output_dir=output_dir
-                    )
-                    save_results(
-                        data=top_15_employees,
-                        file_name_base=f"Top_15_Mitarbeiter_6Months_{model_name.replace(' ', '_')}",
-                        output_dir=output_dir
-                    )
-                else:
-                    print(f"WARNUNG: Keine Ergebnisse für {model_name} über die letzten 6 Monate vorhanden.")
-
-            except KeyError:
-                print(f"FEHLER: Modell '{model_name}' wurde nicht in 'models' gefunden.")
-            except Exception as e:
-                print(f"Fehler bei der Verarbeitung des Modells '{model_name}' über die letzten 6 Monate: {e}")
-
-    except Exception as e:
-        print(
-            f"Fehler beim Ermitteln der kritischen Mitarbeiter und Top 15 über die letzten 6 Monate für alle Modelle: {e}")
-
-    # 15. Ergebnisse speichern
+    # 14. Ergebnisse speichern
     print("\n### Schritt 14: Ergebnisse speichern ###")
     print("Ergebnisse speichern...")
     save_results(critical_employees, "Critical_Mitarbeiter", output_dir)
@@ -2234,29 +1916,15 @@ def main():
     print("### Komprimiert: Komprimiert")
     print("### Programm beendet.")
 
-    #16 Vergleich der Modelle
+    #15. Vergleich der Modelle
     print("\n### Schritt 15: Vergleich der Modelle ###")
     file_paths = {
-        "LightGBM": "Outputs/Top_15_Mitarbeiter_LightGBM.csv",
-        "Logistic_Regression": "Outputs/Top_15_Mitarbeiter_Logistic_Regression.csv",
-        "Neural_Network": "Outputs/Top_15_Mitarbeiter_Neural_Network.csv",
-        "Random_Forest": "Outputs/Top_15_Mitarbeiter_Random_Forest.csv",
-        "XGBoost": "Outputs/Top_15_Mitarbeiter_XGBoost.csv"
+        "LightGBM": "Outputs/all_models/Top_15_Mitarbeiter_LightGBM.csv",
+        "Logistic_Regression": "Outputs/all_models/Top_15_Mitarbeiter_Logistic_Regression.csv",
+        "Neural_Network": "Outputs/all_models/Top_15_Mitarbeiter_Neural_Network.csv",
+        "Random_Forest": "Outputs/all_models/Top_15_Mitarbeiter_Random_Forest.csv",
+        "XGBoost": "Outputs/all_models/Top_15_Mitarbeiter_XGBoost.csv"
     }
-
-    result = compare_model_top_employees(file_paths)
-    print(result)
-
-    #17 Vergleich der Modelle 6 Monate
-    file_paths = {
-        "LightGBM": "Outputs/Top_15_Mitarbeiter_LightGBM.csv",
-        "Logistic_Regression": "Outputs/Top_15_Mitarbeiter_Logistic_Regression.csv",
-        "Neural_Network": "Outputs/Top_15_Mitarbeiter_Neural_Network.csv",
-        "Random_Forest": "Outputs/Top_15_Mitarbeiter_Random_Forest.csv",
-        "XGBoost": "Outputs/Top_15_Mitarbeiter_XGBoost.csv"
-    }
-
-    # Ergebnisse der Funktion
     result = compare_model_top_employees(file_paths)
     print(result)
 

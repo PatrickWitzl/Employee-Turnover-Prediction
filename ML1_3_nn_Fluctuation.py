@@ -14,7 +14,7 @@ PLOT_DIR = os.path.join("Outputs","ML1")
 os.makedirs(PLOT_DIR, exist_ok=True)
 
 # Modell laden
-nn_model = load_model('nn_model_2.keras')
+nn_model = load_model('nn_model.keras')
 
 # Ursprüngliche Daten vorbereiten
 df = pd.read_csv("HR_cleaned.csv")
