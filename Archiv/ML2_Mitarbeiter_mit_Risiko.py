@@ -27,7 +27,7 @@ def setup_directories():
 def load_and_prepare_data():
     """ Lädt und bereitet den HR-Datensatz vor. """
     try:
-        df_original = pd.read_csv("HR_cleaned.csv")  # Lade den HR-Datensatz
+        df_original = pd.read_csv("../HR_cleaned.csv")  # Lade den HR-Datensatz
         print("Datensatz erfolgreich geladen.")
     except FileNotFoundError:
         print("Fehler: Datei 'HR_cleaned.csv' nicht gefunden.")

@@ -15,7 +15,7 @@ PLOTS_DIR = Path("Plots")
 PLOTS_DIR.mkdir(exist_ok=True)
 
 # Daten laden
-df = pd.read_csv("HR_cleaned.csv")  # Datei muss im Arbeitsverzeichnis sein
+df = pd.read_csv("../HR_cleaned.csv")  # Datei muss im Arbeitsverzeichnis sein
 df_copy = df.copy()
 
 # Filtere die Daten für Abwesenheitsgrund == "Krankheit" und summiere die Fehlzeiten

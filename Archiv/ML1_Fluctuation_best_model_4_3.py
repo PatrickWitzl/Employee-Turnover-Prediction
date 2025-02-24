@@ -1610,9 +1610,9 @@ def main():
       Hauptlogik für die Fluktuationsanalyse und das Modelltraining.
       """
     plot_dir = "Plots"
-    models_dir = "Models"
-    output_dir = "Outputs"
-    output_dir_all = "Outputs/all_models"
+    models_dir = "../Models"
+    output_dir = "../Outputs"
+    output_dir_all = "../Outputs/all_models"
     os.makedirs(plot_dir, exist_ok=True)  # Verzeichnis für Plots erstellen
     os.makedirs(models_dir, exist_ok=True)
     os.makedirs(output_dir, exist_ok=True)
@@ -1621,7 +1621,7 @@ def main():
     # 1. Daten laden und vorbereiten
     print("\n### Schritt 1: Daten laden ###")
     print("Daten laden...")
-    file_path = "HR_cleaned.csv"
+    file_path = "../HR_cleaned.csv"
     if not os.path.exists(file_path):
         print(f"Fehler: Die Datei '{file_path}' wurde nicht gefunden.")
         return

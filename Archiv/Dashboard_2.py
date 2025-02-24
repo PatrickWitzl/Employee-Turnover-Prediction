@@ -4,10 +4,16 @@ import dash_bootstrap_components as dbc
 import pandas as pd
 import plotly.express as px
 from datetime import datetime
-
+import base64
+import io
+import matplotlib.pyplot as plt
+import seaborn as sns
+import base64
+from io import BytesIO
+import numpy as np
 
 # Beispiel: CSV laden (ersetze dies durch deine tatsächlichen Daten)
-df = pd.read_csv("HR_cleaned.csv", low_memory=False)
+df = pd.read_csv("../HR_cleaned.csv", low_memory=False)
 
 color_mapping = {
     "Aktiv": "#1f77b4",  # Blau
@@ -43,22 +49,45 @@ app.layout = html.Div(
                 html.Button("KPIs & Trends", id="btn-to-page-1",
                             className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"),
                 html.Button("Analysen & Details", id="btn-to-page-2",
-                            className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded")
+                            className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"),
+
+                html.Button("Korrelationsmatrix", id="btn-to-page-4",  # Neuer Button für Korrelationsmatrix
+                            className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"),
+                html.Button("Datenupload", id="btn-to-page-3",
+                            className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"),
             ],
         ),
 
         # Platzhalter für dynamische Inhalte (Seiteninhalt)
-        html.Div(id="page-content", className="mt-4")
+        html.Div(id="page-content", className="mt-4"),
+
+        # Footer mit fixer Position
+        html.Div(
+            className="text-center text-gray-500 text-sm mt-6",
+            children="© 2025 Patrick Witzl",
+            style={
+                "position": "fixed",
+                "width": "100%",
+                "bottom": "0",
+                "left": "0",
+                "backgroundColor": "white",
+                "padding": "10px 0",
+                "boxShadow": "0 -2px 5px rgba(0, 0, 0, 0.1)",  # Schatten über Inhalt
+                "zIndex": "1000"  # Damit der Footer immer oben bleibt, falls Inhalte scrollen
+            }
+        )
     ]
 )
 
-# Navigation zwischen Seiten
+
 @app.callback(
     Output("page-content", "children"),
     [Input("btn-to-page-1", "n_clicks"),
-     Input("btn-to-page-2", "n_clicks")]
+     Input("btn-to-page-2", "n_clicks"),
+     Input("btn-to-page-3", "n_clicks"),
+     Input("btn-to-page-4", "n_clicks")]  # Neuer Input für Korrelationsmatrixseite
 )
-def navigate(button_1_clicks, button_2_clicks):
+def navigate(button_1_clicks, button_2_clicks, button_3_clicks, button_4_clicks):
     ctx = dash.callback_context
     if not ctx.triggered:
         return render_page_1()  # Standard: Seite 1
@@ -68,8 +97,13 @@ def navigate(button_1_clicks, button_2_clicks):
         return render_page_1()
     elif button_id == "btn-to-page-2":
         return render_page_2()
+    elif button_id == "btn-to-page-3":
+        return render_page_3()
+    elif button_id == "btn-to-page-4":  # Navigation zur neuen Seite
+        return render_page_correlation_matrix()
 
     return render_page_1()  # Fallback
+
 
 # Inhalte der ersten Seite (KPIs & Trends)
 def render_page_1():
@@ -202,6 +236,85 @@ def render_page_2():
         )
     ])
 
+# Hinzufügen der dritten Seite (Render-Methode)
+def render_page_3():
+    return html.Div(
+        children=[
+            html.H2(
+                "Datenupload & Aktualisierung",
+                className="text-center text-blue-600 font-bold text-2xl mb-6",
+            ),
+            html.Div(
+                className="mt-4 mb-6",
+                children=[
+                    html.H3("CSV-Datei hochladen:", className="text-lg text-gray-700"),
+                    dcc.Upload(
+                        id="upload-data",
+                        children=html.Div(
+                            ["Datei per Drag & Drop hochladen oder ", html.A("Datei auswählen")]
+                        ),
+                        style={
+                            "width": "100%",
+                            "height": "60px",
+                            "lineHeight": "60px",
+                            "borderWidth": "1px",
+                            "borderStyle": "dashed",
+                            "borderRadius": "5px",
+                            "textAlign": "center",
+                            "margin": "10px",
+                        },
+                        multiple=False,  # Keine Mehrfachuploads zulassen
+                    ),
+                    html.Div(
+                        id="upload-feedback", className="mt-4 text-lg text-gray-700"
+                    ),
+                ],
+            ),
+            html.Div(
+                children=[
+                    html.H3(
+                        "Hinweis: Wenn keine Datei hochgeladen wird, wird die Standarddatei verwendet.",
+                        className="text-md text-gray-500",
+                    )
+                ]
+            ),
+        ],
+    )
+
+
+
+
+
+# Callback zur Verarbeitung des Datei-Uploads und Aktualisierung des Datenrahmens
+@app.callback(
+    Output("upload-feedback", "children"),
+    Input("upload-data", "contents"),
+    [Input("upload-data", "filename"),
+     Input("upload-data", "last_modified")]
+)
+def update_dataset(content, filename, last_modified):
+    global df  # Greife auf den globalen DataFrame zu
+
+    if content is not None:
+        # Inhalte nach Base64 dekodieren und in Pandas-Datensatz umwandeln
+        content_type, content_string = content.split(",")
+        decoded = base64.b64decode(content_string)
+        try:
+            if filename.endswith(".csv"):
+                # Aktualisieren des globalen DataFrames mit der hochgeladenen Datei
+                df = pd.read_csv(io.StringIO(decoded.decode("utf-8")), low_memory=False)
+                return f"Datei '{filename}' erfolgreich hochgeladen und Daten aktualisiert!"
+            else:
+                return "Fehler: Bitte laden Sie eine CSV-Datei hoch."
+        except Exception as e:
+            return f"Fehler beim Hochladen und Verarbeiten der Datei: {str(e)}"
+    else:
+        # Falls keine Datei hochgeladen wurde
+        return "Keine Datei hochgeladen. Standarddatensatz wird verwendet."
+
+
+# Aktualisierung des Datensatzes beim Starten der App
+df = pd.read_csv("../HR_cleaned.csv", low_memory=False)
 
 
 @app.callback(
@@ -317,6 +430,7 @@ def update_status_sums(selected_year):
         f"{num_exits} Personen",  # Ausgeschiedene
         f"{num_retired} Personen"  # Ruhestand
     )
+
 @app.callback(
     Output("active-monthly-trend-line", "figure"),
     Input("year-dropdown", "value")
@@ -324,7 +438,14 @@ def update_status_sums(selected_year):
 def update_active_monthly_trend(selected_year):
     filtered_data = df[(df["Status"] == "Aktiv") & (df["Jahr"] == selected_year)]
     filtered_data = filtered_data.groupby("Monat").size().reset_index(name="Anzahl")
-    fig = px.line(filtered_data, x="Monat", y="Anzahl", title="Trend Aktiv", color_discrete_map=color_mapping)
+    fig = px.line(
+        filtered_data,
+        x="Monat",
+        y="Anzahl",
+        title="Trend Aktiv",
+        color_discrete_map=color_mapping,
+        markers=True
+    )
     return fig
 
 
@@ -335,7 +456,9 @@ def update_active_monthly_trend(selected_year):
 def update_retired_exited_monthly_trend(selected_year):
     filtered_data = df[(df["Status"].isin(["Ausgeschieden", "Ruhestand"])) & (df["Jahr"] == selected_year)]
     filtered_data = filtered_data.groupby(["Monat", "Status"]).size().reset_index(name="Anzahl")
-    fig = px.line(filtered_data, x="Monat", y="Anzahl", color="Status", title="Trend Ruhestand/Ausgeschieden", color_discrete_map=color_mapping
+    fig = px.line(filtered_data, x="Monat", y="Anzahl", color="Status", title="Trend Ruhestand/Ausgeschieden", color_discrete_map=color_mapping,
+    markers=True
+
 )
     return fig
 
@@ -356,7 +479,9 @@ def update_active_trend(selected_year):
 
     # Visualisierung erstellen
     fig = px.line(trend_data, x="Jahr", y="Anzahl", title="Aktiv - Jährlicher Trend",
-                  color_discrete_map={"Aktiv": "#1f77b4"})  # Blau für Aktiv
+                  color_discrete_map={"Aktiv": "#1f77b4"},
+        markers=True
+)
     return fig
 
 
@@ -367,7 +492,9 @@ def update_active_trend(selected_year):
 def update_retired_exited_trend(selected_year):
     filtered_data = df[df["Status"].isin(["Ausgeschieden", "Ruhestand"])]
     filtered_data = filtered_data.groupby(["Jahr", "Status"]).size().reset_index(name="Anzahl")
-    fig = px.line(filtered_data, x="Jahr", y="Anzahl", color="Status", title="Jährliche Trends (ausgeschieden)", color_discrete_map=color_mapping
+    fig = px.line(filtered_data, x="Jahr", y="Anzahl", color="Status", title="Jährliche Trends (ausgeschieden)", color_discrete_map=color_mapping,
+    markers=True
+
 )
     return fig
 
@@ -390,6 +517,55 @@ def update_interactive_plot(selected_feature):
         histnorm="percent"  # Prozentuale Darstellung (optional)
     )
     return fig
+
+def render_page_correlation_matrix():
+    # Nur numerische Spalten beibehalten
+    numeric_df = df.select_dtypes(include=["number"])  # Nur numerische Datentypen
+    if numeric_df.empty:
+        return html.Div([
+            html.H2("Korrelationsmatrix", className="text-center text-blue-600 font-bold text-2xl mt-6 mb-6"),
+            html.P("Der Datensatz enthält keine numerischen Spalten, die korreliert werden können.",
+                   className="text-center text-gray-600 text-lg"),
+        ])
+
+    # Berechnung der Korrelationsmatrix
+    correlation_matrix = numeric_df.corr()
+
+    # Entferne die Hauptdiagonale durch Maskierung
+    mask = np.eye(len(correlation_matrix), dtype=bool)  # Erstelle eine Maske für die Hauptdiagonale
+    correlation_matrix_no_diag = correlation_matrix.mask(mask)  # Setze die Diagonale auf NaN
+
+    # Hochauflösende Heatmap mit Seaborn
+    plt.figure(figsize=(20, 20), dpi=300)  # Große Grafik und hohe Auflösung
+    heatmap = sns.heatmap(
+        correlation_matrix_no_diag,  # Verwendet die modifizierte Matrix
+        annot=True,  # Werte im Diagramm anzeigen
+        fmt=".2f",  # Zahlenformat
+        cmap="coolwarm",  # Farbschema
+        square=True,
+        cbar_kws={"shrink": 0.6},  # Farbelement-Leiste verkleinern
+        linewidths=0.5,  # Linien zwischen Zellen
+        mask=mask  # Diagonale ausblenden
+    )
+    plt.title("Korrelationsmatrix ohne Hauptdiagonale", fontsize=20, pad=30)
+    plt.xticks(rotation=45, fontsize=12, ha="right")
+    plt.yticks(fontsize=12)
+
+    # Matplotlib-Plot als Base64-Bild kodieren
+    buf = BytesIO()
+    plt.savefig(buf, format="png", bbox_inches="tight")  # Ränder abschneiden
+    buf.seek(0)
+    encoded_image = base64.b64encode(buf.read()).decode("utf-8")
+    buf.close()
+
+    # Matplotlib Bild in Dash einbetten
+    return html.Div([
+        html.H2("Korrelationsmatrix ohne Hauptdiagonale",
+                className="text-center text-blue-600 font-bold text-2xl mt-4 mb-4"),
+        html.Img(src=f"data:image/png;base64,{encoded_image}", style={"width": "100%", "height": "auto"}),
+        # Bild skalieren
+    ])
+
 
 if __name__ == "__main__":
     app.run(debug=True)

@@ -11,9 +11,215 @@ import seaborn as sns
 import base64
 from io import BytesIO
 import numpy as np
+import xgboost as xgb
+import lightgbm as lgb
+from sklearn.ensemble import RandomForestClassifier
+import joblib
+from ML1_Fluctuation_best_model_5 import get_critical_employees_all_models
+import xgboost as xgb
+import os
+import sys
+import time
+import select
+import joblib
+import pandas as pd
+import numpy as np
+import warnings
+import matplotlib.pyplot as plt
+from lightgbm import LGBMClassifier
+from sklearn.metrics import precision_recall_curve
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.compose import ColumnTransformer
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.decomposition import PCA
+from sklearn.metrics import (
+    roc_auc_score,
+    accuracy_score,
+    roc_curve,
+    auc,
+    f1_score,
+    precision_score,
+    recall_score,
+    matthews_corrcoef,
+    log_loss,
+    confusion_matrix
+)
+# Wichtige Standard-Imorts
+import os
+import pandas as pd
+import joblib
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from ML1_Fluctuation_best_model_5 import preprocess_data, split_and_scale, train_xgboost
+import xgboost as xgb
+import joblib  # Für das Laden des Scalers
+import dash
+from dash import Input, Output, State, ctx, dcc, html, dash_table
+import plotly.express as px
 
-# Beispiel: CSV laden (ersetze dies durch deine tatsächlichen Daten)
-df = pd.read_csv("HR_cleaned.csv", low_memory=False)
+# Schritt 1: Lade transformierte Daten
+df_transformed = pd.read_csv("../X_transformed.csv")
+
+# Schritt 2: Scaler laden und Features validieren
+scaler = joblib.load("../Models/scaler.pkl")
+expected_features = scaler.feature_names_in_
+
+# Überprüfen, ob alle erwarteten Features vorhanden sind
+for feature in expected_features:
+    if feature not in df_transformed.columns:
+        print(f"Feature '{feature}' fehlt. Ergänze es mit Dummy-Wert.")
+        df_transformed[feature] = 0
+
+# Sortiere die Features in der erwarteten Reihenfolge
+df_transformed = df_transformed[expected_features]
+
+# Sicherstellen, dass die Spalten numerisch sind
+df_transformed = df_transformed.astype(float)
+
+# Schritt 3: Transformierte Daten in eine DMatrix umwandeln
+dmatrix = xgb.DMatrix(df_transformed)
+
+# Debug-Ausgabe: Überprüfe die DMatrix
+print(f"DMatrix erstellt mit {dmatrix.num_col()} Spalten und {dmatrix.num_row()} Zeilen.")
+
+# Schritt 4: XGBoost-Modell laden und Vorhersage durchführen
+xgb_model = xgb.Booster()
+xgb_model.load_model("Models/xgboost_model.json")
+print("XGBoost-Modell erfolgreich aus JSON geladen.")
+
+# Vorhersagen durchführen
+if dmatrix.num_col() == 0:
+    raise ValueError("Keine gültigen Features in der DMatrix! Überprüfe die transformierten Daten.")
+else:
+    predictions = xgb_model.predict(dmatrix)
+    print("Vorhersagen erfolgreich:", predictions)
+
+# Optional: Transformierte Daten speichern (nur falls nötig)
+output_path = "../X_transformed_updated.csv"
+df_transformed.to_csv(output_path, index=False)
+print(f"Die aktualisierten transformierten Daten wurden unter '{output_path}' gespeichert.")
+
+# Schritt 5: Modellvorhersagen durchführen
+if dmatrix.num_col() == 0:
+    raise ValueError("Keine gültigen Features in der DMatrix! Überprüfe die transformierten Daten.")
+else:
+    predictions = xgb_model.predict(dmatrix)
+    print(f"Vorhersagen erfolgreich: {predictions}")
+
+
+# Schritt 6: Modellvorhersage durchführen (falls relevant)
+predictions = xgb_model.predict(xgb.DMatrix(df_transformed))
+print("Vorhersagen:", predictions)
+
+# Schritt 7: Features sortieren basierend auf den erwarteten Feature-Namen
+df_transformed = df_transformed[expected_features]  # Kein erneutes "X_transformed"
+
+# Schritt 8: Transformierte Daten speichern
+output_path = "../X_transformed.csv"
+df_transformed.to_csv(output_path, index=False)
+print(f"X_transformed.csv wurde erfolgreich unter '{output_path}' gespeichert.")
+
+
+def get_critical_employees(model, X_transformed, df, scaler_file="Models/scaler.pkl", threshold=0.0):
+    """
+    Identifiziert kritische Mitarbeiter mit einer Fluktuationswahrscheinlichkeit höher
+    als der angegebenen Schwelle unter Verwendung eines gespeicherten Scalers.
+    Unterstützt XGBoost-Booster und andere sklearn-ähnliche Modelle.
+
+    Args:
+        model: Das trainierte Modell für die Vorhersage (z. B. ein XGBoost-Modell).
+        X_transformed (np.ndarray): Die preprocessierten Features (unskaliert).
+        df (pd.DataFrame): Der DataFrame mit zusätzlichen Informationen (z. B. Mitarbeiterdaten).
+        scaler_file (str): Dateiname des gespeicherten Scalers.
+        threshold (float): Der Schwellenwert für die Fluktuationswahrscheinlichkeit.
+
+    Returns:
+        dict: Ein Dictionary mit den folgenden Ergebnissen:
+              - "critical_employees" (pd.DataFrame): Alle kritischen Mitarbeiter.
+              - "top_15" (pd.DataFrame): Top 15 Mitarbeiter mit höchster Wahrscheinlichkeit.
+              - "errors" (list(str)): Liste von Fehlermeldungen, falls aufgetreten.
+    """
+
+    errors = []
+
+    # ** Debugging Input-Daten **
+    try:
+        print(f"Shape von X_transformed: {X_transformed.shape}")
+        print(f"Shape von df: {df.shape}")
+    except AttributeError as e:
+        errors.append(f"Fehler bei Datenformaten: {e}")
+        return {"critical_employees": None, "top_15": None, "errors": errors}
+
+    # Dynamisch letzten Monat und Jahr bestimmen
+    try:
+        max_year = df["Jahr"].max()
+        max_month_in_max_year = df[df["Jahr"] == max_year]["Monat"].max()
+        print(f"Letztes Jahr: {max_year}, letzter Monat: {max_month_in_max_year}")
+    except Exception as e:
+        errors.append(f"Fehler beim Ermitteln von Monat/Jahr: {e}")
+        return {"critical_employees": None, "top_15": None, "errors": errors}
+
+    # Lade und nutze den Scaler
+    try:
+        scaler = joblib.load(scaler_file)
+        X_transformed = scaler.transform(X_transformed)
+        print("Scaler erfolgreich angewendet.")
+    except Exception as e:
+        errors.append(f"Fehler beim Laden des Scalers '{scaler_file}': {e}")
+        return {"critical_employees": None, "top_15": None, "errors": errors}
+
+    # Vorhersagen berechnen
+    try:
+        if isinstance(model, xgb.Booster):
+            dmatrix = xgb.DMatrix(X_transformed)
+            y_proba = model.predict(dmatrix)
+        elif hasattr(model, "predict_proba"):
+            y_proba = model.predict_proba(X_transformed)[:, 1]
+        elif hasattr(model, "predict"):
+            y_proba = model.predict(X_transformed).flatten()
+        else:
+            raise AttributeError(f"Modelltyp '{type(model)}' wird nicht unterstützt.")
+    except Exception as e:
+        errors.append(f"Fehler bei Modell-Vorhersagen: {e}")
+        return {"critical_employees": None, "top_15": None, "errors": errors}
+
+    # Ergebnisse verknüpfen
+    try:
+        df["Fluktuationswahrscheinlichkeit"] = y_proba * 100
+    except ValueError as e:
+        errors.append(f"Fehler beim Hinzufügen der Fluktuationswahrscheinlichkeit: {e}")
+        return {"critical_employees": None, "top_15": None, "errors": errors}
+
+    # Kritische Mitarbeiter identifizieren
+    try:
+        df_filtered = df[
+            (df["Fluktuation"] == 0) &
+            (df["Monat"] == max_month_in_max_year) &
+            (df["Jahr"] == max_year)
+            ]
+
+        print(f"Shape nach Fluktuationsfilter: {df_filtered.shape}")
+
+        critical_employees = df_filtered[df_filtered["Fluktuationswahrscheinlichkeit"] > threshold]
+        critical_employees = critical_employees.sort_values(by="Fluktuationswahrscheinlichkeit", ascending=False)
+        top_15 = critical_employees.head(15)
+
+        if "Mitarbeiter_ID" in critical_employees.columns:
+            critical_employees = critical_employees.drop_duplicates(subset=["Mitarbeiter_ID"])
+
+    except Exception as e:
+        errors.append(f"Fehler beim Filtern der Mitarbeiterdaten: {e}")
+        return {"critical_employees": None, "top_15": None, "errors": errors}
+
+    # Finaler Output
+    return {
+        "critical_employees": critical_employees,
+        "top_15": top_15,
+        "errors": errors
+    }
+
 
 color_mapping = {
     "Aktiv": "#1f77b4",  # Blau
@@ -50,8 +256,9 @@ app.layout = html.Div(
                             className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"),
                 html.Button("Analysen & Details", id="btn-to-page-2",
                             className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"),
-
                 html.Button("Korrelationsmatrix", id="btn-to-page-4",  # Neuer Button für Korrelationsmatrix
+                            className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"),
+                html.Button("Kritische Mitarbeiter", id="btn-to-page-5",
                             className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"),
                 html.Button("Datenupload", id="btn-to-page-3",
                             className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"),
@@ -85,12 +292,13 @@ app.layout = html.Div(
     [Input("btn-to-page-1", "n_clicks"),
      Input("btn-to-page-2", "n_clicks"),
      Input("btn-to-page-3", "n_clicks"),
-     Input("btn-to-page-4", "n_clicks")]  # Neuer Input für Korrelationsmatrixseite
+     Input("btn-to-page-4", "n_clicks"),
+     Input("btn-to-page-5", "n_clicks")]  # Hinzugefügter Button für Seite 5
 )
-def navigate(button_1_clicks, button_2_clicks, button_3_clicks, button_4_clicks):
+def navigate(button_1_clicks, button_2_clicks, button_3_clicks, button_4_clicks, button_5_clicks):
     ctx = dash.callback_context
     if not ctx.triggered:
-        return render_page_1()  # Standard: Seite 1
+        return render_page_1()  # Standardseite: Seite 1
     button_id = ctx.triggered[0]['prop_id'].split('.')[0]
 
     if button_id == "btn-to-page-1":
@@ -99,10 +307,12 @@ def navigate(button_1_clicks, button_2_clicks, button_3_clicks, button_4_clicks)
         return render_page_2()
     elif button_id == "btn-to-page-3":
         return render_page_3()
-    elif button_id == "btn-to-page-4":  # Navigation zur neuen Seite
+    elif button_id == "btn-to-page-4":
         return render_page_correlation_matrix()
+    elif button_id == "btn-to-page-5":
+        return render_page_critical_employees()
 
-    return render_page_1()  # Fallback
+    return render_page_1()
 
 
 # Inhalte der ersten Seite (KPIs & Trends)
@@ -281,10 +491,39 @@ def render_page_3():
         ],
     )
 
+def render_page_critical_employees():
+    """Seite für die Anzeige der kritischen Mitarbeiter."""
+    return html.Div(
+        className="space-y-6",
+        children=[
+            # Hauptüberschrift
+            html.H2("Kritische Mitarbeiter", className="text-center text-blue-600 font-bold text-2xl mb-6"),
 
+            # Eingabefeld für Schwellenwert (Threshold)
+            html.Div(
+                className="w-1/2 mx-auto mt-4",
+                children=[
+                    html.Label(
+                        "Schwellenwert für Fluktuationswahrscheinlichkeit (%)",
+                        className="text-gray-700 text-lg"
+                    ),
+                    dcc.Input(
+                        id="threshold-input",
+                        type="number",
+                        value=0,  # Standardwert
+                        placeholder="Schwellenwert",
+                        className="rounded border-gray-300 w-full px-2 py-1",
+                    )
+                ],
+            ),
 
-
-
+            # Platzhalter für die Tabelle (wird dynamisch durch Callbacks aktualisiert)
+            html.Div(
+                id="critical-employees-table",
+                className="mt-6"
+            ),
+        ]
+    )
 # Callback zur Verarbeitung des Datei-Uploads und Aktualisierung des Datenrahmens
 @app.callback(
     Output("upload-feedback", "children"),
@@ -314,7 +553,7 @@ def update_dataset(content, filename, last_modified):
 
 
 # Aktualisierung des Datensatzes beim Starten der App
-df = pd.read_csv("HR_cleaned.csv", low_memory=False)
+df = pd.read_csv("../HR_cleaned.csv", low_memory=False)
 
 
 @app.callback(
@@ -564,8 +803,59 @@ def render_page_correlation_matrix():
                 className="text-center text-blue-600 font-bold text-2xl mt-4 mb-4"),
         html.Img(src=f"data:image/png;base64,{encoded_image}", style={"width": "100%", "height": "auto"}),
         # Bild skalieren
-    ])
+    ]
+)
 
+@app.callback(
+    Output("critical-employees-table", "children"),
+    Input("threshold-input", "value")  # Nur der Threshold wird als Input verwendet
+)
+def update_critical_employees_components(threshold):
+    # Lade transformierte Daten und Originaldaten
+    X_transformed = pd.read_csv("../X_transformed.csv")
+    df_original = pd.read_csv("../HR_cleaned.csv")
+
+    # Modell laden
+    xgb_model = xgb.Booster()
+    xgb_model.load_model("Models/xgboost_model.json")
+
+    # Ergebnisse abrufen
+    result = get_critical_employees(
+        model=xgb_model,
+        X_transformed=X_transformed,
+        df=df_original,
+        scaler_file="../Models/scaler.pkl",
+        threshold=threshold
+    )
+
+    critical_employees = result["critical_employees"]
+    top_15 = result["top_15"]
+    errors = result["errors"]
+
+    # Fehler prüfen und ausgeben
+    if errors:
+        return html.P(f"Fehler: {'; '.join(errors)}", className="text-danger text-center")
+
+    # Validierung
+    if critical_employees is None or critical_employees.empty:
+        return html.P("Keine kritischen Mitarbeiter gefunden.", className="text-center text-gray-500")
+
+    # Tabelle erstellen
+    table = dash_table.DataTable(
+        id="critical-employees-table",
+        columns=[{"name": col, "id": col} for col in critical_employees.columns],
+        data=critical_employees.to_dict("records"),
+        style_table={"overflowX": "auto"},
+        style_cell={"textAlign": "left", "padding": "5px", "fontFamily": "Arial"},
+        style_header={"backgroundColor": "#f4f4f4", "fontWeight": "bold"},
+    )
+
+    # Optionale Darstellung der Top 15 (Debug-Ausgabe)
+    if not top_15.empty:
+        print("Top 15 Mitarbeiter gefunden:")
+        print(top_15)
+
+    return table
 
 if __name__ == "__main__":
     app.run(debug=True)

@@ -10,14 +10,14 @@ import time
 start_time = time.time()
 
 # Ausgabeordner für Daten und Plots definieren
-PLOT_DIR = os.path.join("Outputs","ML1")
+PLOT_DIR = os.path.join("../Outputs", "ML1")
 os.makedirs(PLOT_DIR, exist_ok=True)
 
 # Modell laden
 nn_model = load_model('nn_model.keras')
 
 # Ursprüngliche Daten vorbereiten
-df = pd.read_csv("HR_cleaned.csv")
+df = pd.read_csv("../HR_cleaned.csv")
 df_copy = df.copy()
 
 
