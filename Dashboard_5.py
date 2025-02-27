@@ -86,7 +86,7 @@ print(f"DMatrix erstellt mit {dmatrix.num_col()} Spalten und {dmatrix.num_row()}
 
 # Schritt 4: XGBoost-Modell laden und Vorhersage durchführen
 xgb_model = xgb.Booster()
-xgb_model.load_model("Models/xgboost_model.json")
+xgb_model.load_model("Models/xgboost_model.pkl")
 print("XGBoost-Modell erfolgreich aus JSON geladen.")
 
 # Vorhersagen durchführen
