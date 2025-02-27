@@ -81,12 +81,13 @@ def preprocess_data(df, output_file="X_transformed.csv"):
         lambda row: row['Fehlzeiten_Krankheitstage'] if row['Abwesenheitsgrund'] == "Krankheit" else 0,
         axis=1
     )
+
     # Zielvariable "Fluktuation" ableiten
     df['Fluktuation'] = df['Status'].apply(lambda x: 1 if x == "Ausgeschieden" else 0)
 
     # Features kombinieren (manuelle Auswahl nach Analyse)
     selected_features = [
-        'Jahr','Monat', 'Alter', 'Überstunden', 'Fehlzeiten_Krankheitstage',
+        'Jahr', 'Monat', 'Alter', 'Überstunden', 'Fehlzeiten_Krankheitstage',
         'Gehalt', 'Zufriedenheit', 'Fortbildungskosten',
         'Position', 'Geschlecht', 'Standort',
         'Arbeitszeitmodell', 'Verheiratet',
@@ -102,10 +103,10 @@ def preprocess_data(df, output_file="X_transformed.csv"):
     categorical_columns = X.select_dtypes(include='object').columns
     numerical_columns = X.select_dtypes(exclude='object').columns
 
-    # Preprocessor definieren
+    # Preprocessor definieren, mit Skalierung für numerische Spalten und One-Hot-Encoding für kategorische
     preprocessor = ColumnTransformer(
         transformers=[
-            ('num', 'passthrough', numerical_columns),
+            ('num', StandardScaler(), numerical_columns),
             ('cat', OneHotEncoder(drop='first', sparse_output=False), categorical_columns)
         ]
     )
@@ -114,14 +115,13 @@ def preprocess_data(df, output_file="X_transformed.csv"):
     X_transformed = preprocessor.fit_transform(X)
 
     # Neue Spaltennamen nach Transformation
-    transformed_columns = list(numerical_columns) + \
+    transformed_columns = list(preprocessor.named_transformers_['num'].feature_names_in_) + \
                           list(preprocessor.named_transformers_['cat'].get_feature_names_out(categorical_columns))
 
     # In DataFrame zurückschreiben
     X_transformed = pd.DataFrame(X_transformed, columns=transformed_columns, index=X.index)
 
     # Synchronisation von df mit X_transformed sicherstellen
-    # Prüfe die Indizes, um sicherzustellen, dass nur relevante Zeilen enthalten sind
     if not X_transformed.index.equals(df.index):
         print("Index nicht identisch! Sync wird vorgenommen.")
         df = df.loc[X_transformed.index]  # Synchronisierung basierend auf dem Index von X_transformed
@@ -139,15 +139,14 @@ def preprocess_data(df, output_file="X_transformed.csv"):
 
     return df, X_transformed, X_resampled, y_resampled, preprocessor
 
-def split_and_scale(X_resampled, y_resampled, test_size=0.2, scaler_file="Models/scaler.pkl"):
+def split(X_resampled, y_resampled, test_size=0.2):
     """
-    Teilt die Daten in Trainings- und Testsets und skaliert sie. Speichert den Scaler für spätere Skalierungen.
+    Teilt die Daten in Trainings- und Testsets und skaliert sie.
 
     Args:
         X_resampled (np.ndarray): Features nach Resampling.
         y_resampled (np.ndarray): Zielvariable nach Resampling.
         test_size (float): Anteil der Testdaten.
-        scaler_file (str): Dateiname für das Speichern des Scalers.
 
     Returns:
         pd.DataFrame: Skalierte Trainingsdaten (X_train_scaled).
@@ -161,20 +160,7 @@ def split_and_scale(X_resampled, y_resampled, test_size=0.2, scaler_file="Models
         X_resampled, y_resampled, test_size=test_size, random_state=42, stratify=y_resampled
     )
 
-    # Daten skalieren
-    scaler = StandardScaler()
-    X_train_scaled = scaler.fit_transform(X_train)
-    X_test_scaled = scaler.transform(X_test)
-
-    # Scaler speichern
-    joblib.dump(scaler, scaler_file)  # Speichert den Scaler in einer Datei
-    print(f"Scaler wurde gespeichert unter '{scaler_file}'")
-
-    # Daten zurück in DataFrame konvertieren
-    X_train = pd.DataFrame(X_train_scaled, columns=X_resampled.columns)
-    X_test = pd.DataFrame(X_test_scaled, columns=X_resampled.columns)
-
-    return X_train, X_test, y_train, y_test, scaler
+    return X_train, X_test, y_train, y_test
 
 def model_selection():
     """
@@ -1223,18 +1209,18 @@ def get_best_model(models, evaluation_results, fit_results, primary_metric="ROC-
         print(f"  (Gleichstand gelöst durch '{tie_breaker}'.)")
     return best_model, best_model_name
 
-def get_critical_employees(model, X_transformed, df, scaler_file="Models/scaler.pkl",
+def get_critical_employees(model, X_transformed, df,
                            feature_names_file="Models/lightgbm_feature_names.pkl", threshold=0.0):
     """
     Identifiziert kritische Mitarbeiter mit einer Fluktuationswahrscheinlichkeit höher
-    als der angegebenen Schwelle unter Verwendung eines gespeicherten Scalers.
+
      Funktioniert für LightGBM-Modelle und andere sklearn-ähnliche Modelle.
 
     Args:
         model: Das trainierte Modell für die Vorhersage.
         X_transformed (np.ndarray): Die preprocessierten Features (unskaliert).
         df (pd.DataFrame): Der DataFrame mit zusätzlichen Informationen (z. B. Mitarbeiterdaten).
-        scaler_file (str): Dateiname des gespeicherten Scalers.
+
         feature_names_file (str): Pfad zu den gespeicherten Feature-Namen (für LightGBM).
         threshold (float): Der Schwellenwert für die Fluktuationswahrscheinlichkeit.
 
@@ -1249,16 +1235,6 @@ def get_critical_employees(model, X_transformed, df, scaler_file="Models/scaler.
     max_year = df["Jahr"].max()  # Höchstes Jahr im Datensatz
     max_month_in_max_year = df[df["Jahr"] == max_year]["Monat"].max()  # Höchster Monat im höchsten Jahr
     print(f"Letztes Jahr im Datensatz: {max_year}, letzter Monat im Jahr: {max_month_in_max_year}")
-
-    # ** Scaler laden und anwenden **
-    print(f"Lade Scaler aus Datei '{scaler_file}'...")
-    try:
-        scaler = joblib.load(scaler_file)  # Scaler laden
-        X_transformed = scaler.transform(X_transformed)  # Daten skalieren
-        print("Testdaten erfolgreich skaliert.")
-    except Exception as e:
-        print(f"Fehler beim Laden oder Anwenden des Scalers: {e}")
-        return None, None
 
     # ** Feature-Namen laden und auf die Eingabedaten anwenden (nur für LightGBM notwendig) **
     if isinstance(model, lgb.LGBMClassifier) and feature_names_file:
@@ -1328,18 +1304,16 @@ def get_critical_employees(model, X_transformed, df, scaler_file="Models/scaler.
     print("Kritische Mitarbeiter erfolgreich identifiziert.")
     return critical_employees, top_15
 
-def get_critical_employees_all_models(models, X_transformed, df, scaler_file="Models/scaler.pkl",
+def get_critical_employees_all_models(models, X_transformed, df,
                                       feature_names_file="Models/lightgbm_feature_names.pkl", threshold=0.0):
     """
-    Identifiziert kritische Mitarbeiter und sammelt Ergebnisse für mehrere Modelle,
-    unter Berücksichtigung eines gespeicherten Scalers.
+    Identifiziert kritische Mitarbeiter und sammelt Ergebnisse für mehrere Modelle.
     Unterstützt LightGBM mit gespeicherten Feature-Namen.
 
     Args:
         models (dict): Ein Dictionary der Modelle, wobei die Keys die Modellnamen sind.
         X_transformed (np.ndarray): Die preprocessierten Features (unskaliert).
         df (pd.DataFrame): Der DataFrame mit Mitarbeiterinformationen.
-        scaler_file (str): Dateiname des gespeicherten Scalers.
         feature_names_file (str): Pfad zu den gespeicherten Feature-Namen (für LightGBM).
         threshold (float): Der Schwellenwert für die Fluktuationswahrscheinlichkeit.
 
@@ -1355,16 +1329,6 @@ def get_critical_employees_all_models(models, X_transformed, df, scaler_file="Mo
     max_year = df["Jahr"].max()
     max_month_in_max_year = df[df["Jahr"] == max_year]["Monat"].max()
     print(f"Letztes Jahr im Datensatz: {max_year}, letzter Monat im Jahr: {max_month_in_max_year}")
-
-    # ** Scaler laden und Testdaten skalieren **
-    print(f"Lade Scaler aus '{scaler_file}'...")
-    try:
-        scaler = joblib.load(scaler_file)
-        X_transformed = scaler.transform(X_transformed)
-        print("Testdaten erfolgreich skaliert.")
-    except Exception as e:
-        print(f"Fehler beim Laden oder Anwenden des Scalers: {e}")
-        return None
 
     # ** Synchronisierung zwischen X_transformed und df **
     if len(X_transformed) != len(df):
@@ -1572,7 +1536,7 @@ def main():
     # 3. Daten aufteilen und skalieren (Training/Test-Sets erstellen und skalieren)
     print("\n### Schritt 3: Daten aufteilen und skalieren ###")
     print("Daten aufteilen und skalieren...")
-    X_train, X_test, y_train, y_test, scaler = split_and_scale(X_resampled, y_resampled)
+    X_train, X_test, y_train, y_test = split(X_resampled, y_resampled)
     print(f"Shape von X_train_scaled: {X_train.shape}")
     print(f"Shape von X_test_scaled: {X_test.shape}")
     print("Datenaufteilung und Skalierung abgeschlossen.")
