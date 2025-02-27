@@ -238,7 +238,6 @@ def reduce_dimensions(X_train, X_test, X_resampled, n_components=0.95):
         print(f"Fehler während der PCA-Berechnung: {e}")
         raise
 
-
 def model_selection():
     """
     Ermöglicht dem Benutzer, Modelle für die Analyse auszuwählen. Dabei können entweder
@@ -637,7 +636,7 @@ def train_xgboost(X_train, X_test, y_train, y_test, use_saved_models, models_dir
     if len(X_train) == 0 or len(X_test) == 0 or len(y_train) == 0 or len(y_test) == 0:
         raise ValueError("Trainings- oder Testdaten sind leer. Bitte überprüfen!")
 
-    model_file = os.path.join(models_dir, 'xgboost_model.json')
+    model_file = os.path.join(models_dir, 'xgboost_model.pkl')
     model = None
 
     # Prüfen, ob ein gespeichertes Modell vorhanden ist
@@ -665,8 +664,8 @@ def train_xgboost(X_train, X_test, y_train, y_test, use_saved_models, models_dir
 
         # Modell speichern
         try:
-            model.save_model(model_file)
-            print(f"XGBoost-Modell gespeichert als '{model_file}'")
+            joblib.dump(model, model_file)  # Speichern im festgelegten Verzeichnis
+            print(f"XGBoost-Modell erfolgreich in '{model_file}' gespeichert.")
         except Exception as e:
             print(f"Fehler beim Speichern des Modells: {e}")
 
