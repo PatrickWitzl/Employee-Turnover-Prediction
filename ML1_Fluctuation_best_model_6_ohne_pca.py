@@ -53,7 +53,7 @@ def load_data(file_path):
 
     return df
 
-def preprocess_data(df, output_file="X_transformed.csv"):
+def preprocess_data(df):
     """
     Vorverarbeitung der Daten:
     - Zielvariable "Fluktuation" ableiten
@@ -132,10 +132,6 @@ def preprocess_data(df, output_file="X_transformed.csv"):
 
     # Zurück als DataFrame für interpretierbare Spalten
     X_resampled = pd.DataFrame(X_resampled, columns=X_transformed.columns)
-
-    # Transformierte Daten X_transformed als CSV speichern
-    X_transformed.to_csv(output_file, index=False)  # Speichert die Datei
-    print(f"Transformierte Daten wurden gespeichert unter '{output_file}'")
 
     return df, X_transformed, X_resampled, y_resampled, preprocessor
 
