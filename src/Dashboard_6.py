@@ -602,9 +602,9 @@ def process_and_display_critical_employees(contents, selected_model, threshold, 
         critical_employees, top_15_employees = process_and_identify_critical_employees(
             file_path,  # Eingabedatei
             save_filtered_path= None,  # Speicherort für gefilterte Daten
-            models_dir="Models",  # Verzeichnis, in dem das Modell gespeichert ist
+            models_dir="models",  # Verzeichnis, in dem das Modell gespeichert ist
             model_file_name="xgboost_model.pkl",  # Name der Modell-Datei
-            feature_names_file="Models/lightgbm_feature_names.pkl",  # Datei mit Feature-Namen
+            feature_names_file="models/lightgbm_feature_names.pkl",  # Datei mit Feature-Namen
             threshold=0.0  # Schwellenwert für kritische Mitarbeiter
         )  # Schwellenwert für kritische Mitarbeiter
 

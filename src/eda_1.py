@@ -160,7 +160,7 @@ def main():
     start_time = time.time()
 
     # Basisverzeichnis für Plots festlegen
-    PLOTS_DIR = Path("Plots")
+    PLOTS_DIR = Path("plots")
     ensure_dir_exists(PLOTS_DIR)
 
     # Daten laden

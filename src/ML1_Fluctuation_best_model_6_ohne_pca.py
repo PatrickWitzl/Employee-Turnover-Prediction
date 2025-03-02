@@ -1494,10 +1494,10 @@ def main():
     """
     Hauptlogik für die Fluktuationsanalyse und das Modelltraining.
     """
-    plot_dir = "Plots"
-    models_dir = "Models"
-    output_dir = "Outputs"
-    output_dir_all = "Outputs/all_models"
+    plot_dir = "plots"
+    models_dir = "models"
+    output_dir = "outputs"
+    output_dir_all = "outputs/all_models"
     os.makedirs(plot_dir, exist_ok=True)  # Verzeichnis für Plots erstellen
     os.makedirs(models_dir, exist_ok=True)
     os.makedirs(output_dir, exist_ok=True)

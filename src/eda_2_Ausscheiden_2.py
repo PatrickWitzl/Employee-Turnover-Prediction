@@ -494,7 +494,7 @@ def main():
     start_time = time.time()
 
     # Verzeichnis für Plots erstellen
-    PLOTS_DIR = Path("Plots")
+    PLOTS_DIR = Path("plots")
     PLOTS_DIR.mkdir(parents=True, exist_ok=True)
 
     # Datei laden

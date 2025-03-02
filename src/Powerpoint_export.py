@@ -8,8 +8,8 @@ from pptx.util import Cm
 start_time = time.time()
 
 # Ordner, in dem die Plots gespeichert sind
-plot_dir = os.path.join("Plots")
-powerpoint_path = os.path.join("Outputs", "HR_BEM.pptx")
+plot_dir = os.path.join("plots")
+powerpoint_path = os.path.join("outputs", "HR_BEM.pptx")
 
 # Mindestauflösung festlegen (z. B. 1920x1080px)
 MIN_WIDTH = 500
