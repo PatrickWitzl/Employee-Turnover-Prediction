@@ -498,7 +498,7 @@ def main():
     PLOTS_DIR.mkdir(parents=True, exist_ok=True)
 
     # Datei laden
-    file_path = "HR_cleaned.csv"
+    file_path = "../data/HR_cleaned.csv"
     if not Path(file_path).exists():
         print(f"ERROR: Datei '{file_path}' existiert nicht.")
         return

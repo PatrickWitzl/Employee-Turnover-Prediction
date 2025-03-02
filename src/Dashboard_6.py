@@ -12,8 +12,15 @@ import joblib
 import dash
 from dash import Input, Output, State, ctx, dcc, html, dash_table
 import plotly.express as px
+from data_loading import load_dataset
+from data_cleaning import clean_dataset
 from ML1_Fluctuation_best_model_6_ohne_pca import preprocess_data
+from dash import dcc, html, Input, Output, State, ctx, dash_table
 
+import os
+
+from ML1_Fluctuation_best_model_6_ohne_pca import get_critical_employees
+from model_for_dash import process_and_identify_critical_employees
 
 # Beispielhafte Modellpfade
 model_paths = {
@@ -23,30 +30,10 @@ model_paths = {
 }
 
 try:
-    df = pd.read_csv("HR_cleaned.csv", low_memory=False)
+    df = pd.read_csv("../data/HR_cleaned.csv", low_memory=False)
 except FileNotFoundError:
     df = pd.DataFrame()  # Leerer DataFrame als Fallback
 
-
-## Schritt 4: XGBoost-Modell laden und Vorhersage durchführen
-#try:
-    # XGBoost-Modell mit Joblib laden
-#    xgb_model = joblib.load("Models/xgboost_model.pkl")
-#    print("XGBoost-Modell erfolgreich aus der .pkl-Datei geladen.")
-
-#    # Vorhersagen durchführen
-#    if dmatrix.num_col() == 0:
-#        raise ValueError("Keine gültigen Features in der DMatrix! Überprüfe die transformierten Daten.")
-#    else:
-#        predictions = xgb_model.predict(dmatrix)
-#        print("Vorhersagen erfolgreich:", predictions)
-
-#except FileNotFoundError:
-#    print("Die Datei 'Models/xgboost_model.pkl' wurde nicht gefunden. Bitte überprüfe den Pfad.")
-#except ValueError as e:
-#    print(f"Fehler bei den transformierten Daten: {e}")
-#except Exception as e:
-#    print(f"Ein unerwarteter Fehler ist aufgetreten: {e}")
 
 color_mapping = {
     "Aktiv": "#1f77b4",  # Blau
@@ -87,8 +74,6 @@ app.layout = html.Div(
                             className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"),
                 html.Button("Kritische Mitarbeiter", id="btn-to-page-4",
                             className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"),
-                html.Button("Datenupload", id="btn-to-page-5",
-                            className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"),
             ],
         ),
 
@@ -113,15 +98,16 @@ app.layout = html.Div(
     ]
 )
 
+
 @app.callback(
     Output("page-content", "children"),
     [Input("btn-to-page-1", "n_clicks"),
      Input("btn-to-page-2", "n_clicks"),
      Input("btn-to-page-3", "n_clicks"),
      Input("btn-to-page-4", "n_clicks"),
-     Input("btn-to-page-5", "n_clicks")]  # Hinzugefügter Button für Seite 5
+    ]
 )
-def navigate(button_1_clicks, button_2_clicks, button_3_clicks, button_4_clicks, button_5_clicks):
+def navigate(button_1_clicks, button_2_clicks, button_3_clicks, button_4_clicks,):
     ctx = dash.callback_context
     if not ctx.triggered:
         return render_page_1()  # Standardseite: Seite 1
@@ -134,10 +120,7 @@ def navigate(button_1_clicks, button_2_clicks, button_3_clicks, button_4_clicks,
     elif button_id == "btn-to-page-3":
         return render_page_3_correlation_matrix()
     elif button_id == "btn-to-page-4":
-        return render_page_4_critical_employees()
-    elif button_id == "btn-to-page-5":
-        return render_page_5()
-
+        return render_page_4()
 
     return render_page_1()
 
@@ -271,6 +254,7 @@ def render_page_2():
             ]
         )
     ])
+
 def render_page_3_correlation_matrix():
     # Nur numerische Spalten beibehalten
     numeric_df = df.select_dtypes(include=["number"])  # Nur numerische Datentypen
@@ -319,56 +303,8 @@ def render_page_3_correlation_matrix():
         # Bild skalieren
     ]
 )
-def render_page_4_critical_employees():
-    """Seite für die Anzeige der kritischen Mitarbeiter."""
-    return html.Div(
-        className="space-y-6",
-        children=[
-            html.H2("Kritische Mitarbeiter", className="text-center text-blue-600 font-bold text-2xl mb-6"),
 
-            # Dropdown-Menü zur Auswahl eines Modells
-            html.Div(
-                className="w-1/2 mx-auto",
-                children=[
-                    dcc.Dropdown(
-                        id="model-dropdown",
-                        options=[
-                            {"label": "XGBoost", "value": "xgboost"},
-                            {"label": "Random Forest", "value": "random_forest"},
-                            {"label": "LightGBM", "value": "lightgbm"},
-                        ],
-                        value="xgboost",  # Standardauswahl
-                        placeholder="Wähle ein Modell",
-                        className="rounded border-gray-300"
-                    )
-                ],
-            ),
-
-            # Eingabefeld für Schwellenwert (Threshold)
-            html.Div(
-                className="w-1/2 mx-auto mt-4",
-                children=[
-                    html.Label(
-                        "Schwellenwert für Fluktuationswahrscheinlichkeit (%)",
-                        className="text-gray-700 text-lg"
-                    ),
-                    dcc.Input(
-                        id="threshold-input",
-                        type="number",
-                        value=0,  # Standardwert
-                        placeholder="Schwellenwert",
-                        className="rounded border-gray-300 w-full px-2 py-1",
-                    )
-                ],
-            ),
-
-            # Platzhalter für die Tabelle (wird dynamisch durch Callbacks aktualisiert)
-            html.Div(id="critical-employees-table", className="mt-6"),
-        ]
-    )
-
-
-def render_page_5():
+def render_page_4():
     return html.Div(
         children=[
             html.H2(
@@ -396,14 +332,12 @@ def render_page_5():
                         },
                         multiple=False,
                     ),
-                    html.Div(id="upload-feedback", className="mt-4 text-lg text-gray-700"),
+                    html.Div(id="upload-feedbacks", className="mt-4 text-lg text-gray-700"),
                     html.H3("Modell auswählen:", className="mt-6 text-lg text-gray-700"),
                     dcc.Dropdown(
                         id="model-dropdown",
                         options=[
-                            {"label": "XGBoost", "value": "xgboost"},
-                            {"label": "Random Forest", "value": "random_forest"},
-                            {"label": "LightGBM", "value": "lightgbm"},
+                            {"label": "XGBoost", "value": "XGBoost"},
                         ],
                         placeholder="Wähle ein Modell",
                         className="mt-2",
@@ -413,12 +347,13 @@ def render_page_5():
                     dcc.Input(
                         id="threshold-input",
                         type="number",
-                        value=50,
+                        value=10,
                         placeholder="Schwellenwert eingeben",
                         className="mt-2",
                     ),
                     html.Div(id="upload-status", className="mt-4 text-lg text-gray-700"),
-                    html.Div(id="critical-employees-table", className="mt-8"),
+                    html.Div(id="critical-employees-table", className="mt-8", style={"marginBottom": "40px"}
+                    ),
                     html.Div(
                         children=[
                             html.H3(
@@ -431,6 +366,7 @@ def render_page_5():
             ),
         ],
     )
+
 
 @app.callback(
     Output("upload-feedback", "children"),
@@ -456,9 +392,6 @@ def update_dataset(content, filename):
             return f"Fehler beim Einlesen der Datei: {str(e)}"
     else:
         return "Keine Datei hochgeladen."
-
-
-### 3. **Tabelle für kritische Mitarbeiter**
 
 @app.callback(
     [Output("kpi-avg-salary", "children"),
@@ -634,175 +567,75 @@ def update_interactive_plot(selected_feature):
     )
     return fig
 
-def get_critical_employees(model, X_transformed, df, scaler_file="Models/scaler.pkl", threshold=0.0):
-    """
-    Identifiziert kritische Mitarbeiter mit einer Fluktuationswahrscheinlichkeit höher
-    als der angegebenen Schwelle unter Verwendung eines gespeicherten Scalers.
-    Unterstützt XGBoost-Booster und andere sklearn-ähnliche Modelle.
-
-    Args:
-        model: Das trainierte Modell für die Vorhersage (z. B. ein XGBoost-Modell).
-        X_transformed (np.ndarray): Die preprocessierten Features (unskaliert).
-        df (pd.DataFrame): Der DataFrame mit zusätzlichen Informationen (z. B. Mitarbeiterdaten).
-        scaler_file (str): Dateiname des gespeicherten Scalers.
-        threshold (float): Der Schwellenwert für die Fluktuationswahrscheinlichkeit.
-
-    Returns:
-        dict: Ein Dictionary mit den folgenden Ergebnissen:
-              - "critical_employees" (pd.DataFrame): Alle kritischen Mitarbeiter.
-              - "top_15" (pd.DataFrame): Top 15 Mitarbeiter mit höchster Wahrscheinlichkeit.
-              - "errors" (list(str)): Liste von Fehlermeldungen, falls aufgetreten.
-    """
-
-    errors = []
-
-    # ** Debugging Input-Daten **
-    try:
-        print(f"Shape von X_transformed: {X_transformed.shape}")
-        print(f"Shape von df: {df.shape}")
-    except AttributeError as e:
-        errors.append(f"Fehler bei Datenformaten: {e}")
-        return {"critical_employees": None, "top_15": None, "errors": errors}
-
-    # Dynamisch letzten Monat und Jahr bestimmen
-    try:
-        max_year = df["Jahr"].max()
-        max_month_in_max_year = df[df["Jahr"] == max_year]["Monat"].max()
-        print(f"Letztes Jahr: {max_year}, letzter Monat: {max_month_in_max_year}")
-    except Exception as e:
-        errors.append(f"Fehler beim Ermitteln von Monat/Jahr: {e}")
-        return {"critical_employees": None, "top_15": None, "errors": errors}
-
-    # Lade und nutze den Scaler
-    try:
-        scaler = joblib.load(scaler_file)
-        X_transformed = scaler.transform(X_transformed)
-        print("Scaler erfolgreich angewendet.")
-    except Exception as e:
-        errors.append(f"Fehler beim Laden des Scalers '{scaler_file}': {e}")
-        return {"critical_employees": None, "top_15": None, "errors": errors}
-
-    # Vorhersagen berechnen
-    try:
-        if isinstance(model, xgb.Booster):
-            dmatrix = xgb.DMatrix(X_transformed)
-            y_proba = model.predict(dmatrix)
-        elif hasattr(model, "predict_proba"):
-            y_proba = model.predict_proba(X_transformed)[:, 1]
-        elif hasattr(model, "predict"):
-            y_proba = model.predict(X_transformed).flatten()
-        else:
-            raise AttributeError(f"Modelltyp '{type(model)}' wird nicht unterstützt.")
-    except Exception as e:
-        errors.append(f"Fehler bei Modell-Vorhersagen: {e}")
-        return {"critical_employees": None, "top_15": None, "errors": errors}
-
-    # Ergebnisse verknüpfen
-    try:
-        df["Fluktuationswahrscheinlichkeit"] = y_proba * 100
-    except ValueError as e:
-        errors.append(f"Fehler beim Hinzufügen der Fluktuationswahrscheinlichkeit: {e}")
-        return {"critical_employees": None, "top_15": None, "errors": errors}
-
-    # Kritische Mitarbeiter identifizieren
-    try:
-        df_filtered = df[
-            (df["Fluktuation"] == 0) &
-            (df["Monat"] == max_month_in_max_year) &
-            (df["Jahr"] == max_year)
-            ]
-
-        print(f"Shape nach Fluktuationsfilter: {df_filtered.shape}")
-
-        critical_employees = df_filtered[df_filtered["Fluktuationswahrscheinlichkeit"] > threshold]
-        critical_employees = critical_employees.sort_values(by="Fluktuationswahrscheinlichkeit", ascending=False)
-        top_15 = critical_employees.head(15)
-
-        if "Mitarbeiter_ID" in critical_employees.columns:
-            critical_employees = critical_employees.drop_duplicates(subset=["Mitarbeiter_ID"])
-
-    except Exception as e:
-        errors.append(f"Fehler beim Filtern der Mitarbeiterdaten: {e}")
-        return {"critical_employees": None, "top_15": None, "errors": errors}
-
-    # Finaler Output
-    return {
-        "critical_employees": critical_employees,
-        "top_15": top_15,
-        "errors": errors
-    }
-
+# Callback für Datei-Upload und Verarbeitung
 @app.callback(
-    [Output("upload-status", "children"),
-     Output("critical-employees-table", "children")],  # Rückgabe: Upload-Status und Tabelle
-    [Input("threshold-input", "value"),
-     Input("model-dropdown", "value")],  # Schwellenwert und Modell
-    prevent_initial_call=True
+    [
+        Output("upload-feedbacks", "children"),
+        Output("critical-employees-table", "children"),
+        Output("upload-status", "children"),
+    ],
+    [
+        Input("upload-data", "contents"),
+        Input("model-dropdown", "value"),
+        Input("threshold-input", "value"),
+    ],
+    [State("upload-data", "filename")],
 )
-def handle_critical_employees(threshold, selected_model):
-    global df  # Verwende die global hochgeladenen Daten
+def process_and_display_critical_employees(contents, selected_model, threshold, filename):
+    if not contents:
+        return "Bitte eine Datei hochladen.", None, "Keine Datei hochgeladen."
+
+    if not selected_model:
+        return "Bitte ein Modell auswählen.", None, "Kein Modell ausgewählt."
 
     try:
-        # Fall 1: Daten hochgeladen
-        if df is not None and not df.empty:
-            # Nutze hochgeladene Daten
-            original_data = df
-            _, X_transformed, _, _, _ = preprocess_data(original_data)  # Preprocessing
-        else:
-            # Fall 2: Keine Daten hochgeladen - Standardfilter verwenden
-            original_data = pd.read_csv("HR_cleaned.csv")
-            X_transformed = pd.read_csv("X_transformed.csv")
+        # ** Schritt 1: Datei laden **
+        content_type, content_string = contents.split(",")
+        decoded = base64.b64decode(content_string)
+        uploaded_df = pd.read_csv(io.StringIO(decoded.decode("utf-8")))
 
-        # Schwellenwert validieren
-        if threshold is None:
-            threshold = 50.0
+        # Pfad für temporäre Speicherung
+        temp_path = "../data/uploaded_temp.csv"
+        uploaded_df.to_csv(temp_path, index=False)  # Datei temporär speichern
 
-        # Überprüfen, ob ein Modell gewählt wurde
-        if not selected_model:
-            return (
-                "Bitte ein Modell auswählen.",
-                html.Div("Kein Modell ausgewählt.", className="text-danger text-center"),
-            )
+        file_path = temp_path
+        critical_employees, top_15_employees = process_and_identify_critical_employees(
+            file_path,  # Eingabedatei
+            save_filtered_path= None,  # Speicherort für gefilterte Daten
+            models_dir="Models",  # Verzeichnis, in dem das Modell gespeichert ist
+            model_file_name="xgboost_model.pkl",  # Name der Modell-Datei
+            feature_names_file="Models/lightgbm_feature_names.pkl",  # Datei mit Feature-Namen
+            threshold=0.0  # Schwellenwert für kritische Mitarbeiter
+        )  # Schwellenwert für kritische Mitarbeiter
 
-        # Modell laden
-        model = joblib.load(model_paths[selected_model])
+        if critical_employees is None or critical_employees.empty:
+            return "Es wurden keine kritischen Mitarbeiter gefunden.", None, "Keine kritischen Mitarbeiter."
 
-        # Kritische Mitarbeiter berechnen
-        result = get_critical_employees(model, X_transformed, original_data, threshold=threshold)
+        # Columns für die Anzeige festlegen
+        columns_to_display = [
+            'Jahr', 'Monat', 'Mitarbeiter_ID', 'Name', 'Position',
+            'Alter', 'Status', 'Fluktuationswahrscheinlichkeit'
+        ]
 
-        # Fehler überprüfen
-        if result["errors"]:
-            return (
-                "Fehler bei der Analyse.",
-                html.Div(f"Fehler: {'|'.join(result['errors'])}", className="text-danger text-center"),
-            )
+        # DataFrame für die Anzeige filtern
+        filtered_top_15_employees = top_15_employees[columns_to_display]
 
-        critical_employees = result["critical_employees"]
-
-        # Wenn keine kritischen Mitarbeiter gefunden werden
-        if critical_employees.empty:
-            return (
-                "Analyse erfolgreich, aber keine kritischen Mitarbeiter gefunden.",
-                html.Div("Keine kritischen Mitarbeiter gefunden.", className="text-gray-500 text-center"),
-            )
-
-        # Tabelle der kritischen Mitarbeiter erstellen
-        employees_table = dash_table.DataTable(
-            id="critical-employees-table",
-            columns=[{"name": col, "id": col} for col in critical_employees.columns],
-            data=critical_employees.to_dict("records"),
+        # Erstellen der DataTable mit den gefilterten Spalten
+        table = dash_table.DataTable(
+            id="critical-employees-results",
+            columns=[{"name": col, "id": col} for col in filtered_top_15_employees.columns],  # Nur gefilterte Spalten
+            data=filtered_top_15_employees.to_dict("records"),
             style_table={"overflowX": "auto"},
             style_cell={"textAlign": "left", "padding": "5px"},
-            style_header={"backgroundColor": "#f4f4f4", "fontWeight": "bold"},
+            style_header={"backgroundColor": "lightblue", "fontWeight": "bold"},
+            page_size=15,  # Maximale Zeilenanzahl pro Seite
         )
 
-        return "Analyse erfolgreich abgeschlossen.", employees_table
+        return f"Datei '{filename}' erfolgreich verarbeitet.", table, f"{len(critical_employees)} kritische Mitarbeiter gefunden."
+
 
     except Exception as e:
-        return (
-            f"Ein Fehler ist aufgetreten: {str(e)}",
-            html.Div("Fehler bei der Verarbeitung.", className="text-danger text-center"),
-        )
+        return f"Ein Fehler ist aufgetreten: {str(e)}", None, "Fehler bei der Verarbeitung."
 
 if __name__ == "__main__":
     app.run(debug=True)

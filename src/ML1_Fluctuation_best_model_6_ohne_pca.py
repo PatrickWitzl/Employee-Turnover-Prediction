@@ -1507,7 +1507,7 @@ def main():
     # 1. Daten laden und vorbereiten
     print("\n### Schritt 1: Daten laden ###")
     print("Daten laden...")
-    file_path = "HR_cleaned.csv"
+    file_path = "../data/HR_cleaned.csv"
     if not os.path.exists(file_path):
         print(f"Fehler: Die Datei '{file_path}' wurde nicht gefunden.")
         return

@@ -61,12 +61,12 @@ print(f"Analyse abgeschlossen in {end_time - start_time:.2f} Sekunden.")
 
 # Bereinigten Datensatz speichern
 if __name__ == "__main__":
-    file_path = "HR_Testdatensatz_filtered.csv"
+    file_path = "../data/HR_Testdatensatz_filtered.csv"
     df = pd.read_csv(file_path)  # Datensatz laden
     cleaned_df = clean_dataset(df)
 
 
     # Bereinigten Datensatz speichern
-    cleaned_file_path = "HR_cleaned.csv"
+    cleaned_file_path = "../data/HR_cleaned.csv"
     cleaned_df.to_csv(cleaned_file_path, index=False)
     print(f"Cleaned dataset saved to {cleaned_file_path}")

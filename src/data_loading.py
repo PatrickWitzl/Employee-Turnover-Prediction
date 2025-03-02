@@ -66,6 +66,6 @@ print(f"Analyse abgeschlossen in {end_time - start_time:.2f} Sekunden.")
 
 if __name__ == "__main__":
     # Beispiel: Eingabe- und Ausgabepfade
-    file_path = "HR_Testdatensatz.csv"  # Eingabedatei
-    save_filtered_path = "HR_Testdatensatz_filtered.csv"  # Speicherort für gefilterte Daten
+    file_path = "../data/HR_Testdatensatz.csv"  # Eingabedatei
+    save_filtered_path = "../data/HR_Testdatensatz_filtered.csv"  # Speicherort für gefilterte Daten
     df = load_dataset(file_path, save_filtered_path)

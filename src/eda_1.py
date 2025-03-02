@@ -164,7 +164,7 @@ def main():
     ensure_dir_exists(PLOTS_DIR)
 
     # Daten laden
-    data_file_path = Path("HR_cleaned.csv", low_memory=False)
+    data_file_path = Path("../data/HR_cleaned.csv", low_memory=False)
     if not data_file_path.exists():
         print(f"ERROR: Datei '{data_file_path}' existiert nicht.")
         exit(1)

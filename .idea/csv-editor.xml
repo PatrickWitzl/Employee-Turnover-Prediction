@@ -45,6 +45,20 @@
             </Attribute>
           </value>
         </entry>
+        <entry key="/Outputs/all_models/Top_15_Mitarbeiter_LightGBM.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="/Outputs/all_models/Top_15_Mitarbeiter_Logistic_Regression.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
       </map>
     </option>
   </component>
