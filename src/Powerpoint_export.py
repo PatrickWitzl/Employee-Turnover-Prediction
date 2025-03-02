@@ -12,8 +12,8 @@ plot_dir = os.path.join("plots")
 powerpoint_path = os.path.join("outputs", "HR_BEM.pptx")
 
 # Mindestauflösung festlegen (z. B. 1920x1080px)
-MIN_WIDTH = 500
-MIN_HEIGHT = 500
+MIN_WIDTH = 1000
+MIN_HEIGHT = 1000
 
 # PowerPoint-Präsentation erstellen
 presentation = Presentation()

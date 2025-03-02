@@ -6,8 +6,6 @@ import os
 import time
 from pathlib import Path
 from wordcloud import WordCloud
-import missingno as msno  # Visualisierung von fehlenden Werten
-
 
 # Funktion: Sicherstellen, dass ein Verzeichnis existiert
 def ensure_dir_exists(directory):
