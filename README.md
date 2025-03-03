@@ -1,5 +1,3 @@
-Here is the copy-and-paste version of the README:
-
 # **Employee Turnover Prediction**  
 
 ## **Project Overview**  
