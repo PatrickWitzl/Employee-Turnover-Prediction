@@ -1234,8 +1234,8 @@ def get_critical_employees(model, X_transformed, df,
     print(f"Shape of df: {df.shape}")
 
     # Dynamically determine the last month and year from the dataset
-    max_year = df["Jahr"].max()  # Highest year in the dataset
-    max_month_in_max_year = df[df["Jahr"] == max_year]["Monat"].max()  # Highest month in the highest year
+    max_year = df["Year"].max()  # Highest year in the dataset
+    max_month_in_max_year = df[df["Year"] == max_year]["Month"].max()  # Highest month in the highest year
     print(f"Last year in the dataset: {max_year}, last month in the year: {max_month_in_max_year}")
 
     # ** Load feature names and apply to input data (only necessary for LightGBM) **
@@ -1278,9 +1278,9 @@ def get_critical_employees(model, X_transformed, df,
     try:
         # Filter: Only employees active (0 churn) in the last month/year
         df = df[
-            (df["Fluktuation"] == 0) &
-            (df["Monat"] == max_month_in_max_year) &
-            (df["Jahr"] == max_year)
+            (df["Turnover"] == 0) &
+            (df["Month"] == max_month_in_max_year) &
+            (df["Year"] == max_year)
             ]
         print(f"Shape after filtering by churn, month, and year: {df.shape}")
 
@@ -1290,21 +1290,21 @@ def get_critical_employees(model, X_transformed, df,
         )
 
         # Remove duplicates based on employee ID
-        if "Mitarbeiter_ID" in critical_employees.columns:
-            duplicate_count = critical_employees.duplicated(subset=["Mitarbeiter_ID"]).sum()
+        if "Employee_ID" in critical_employees.columns:
+            duplicate_count = critical_employees.duplicated(subset=["Employee_ID"]).sum()
             if duplicate_count > 0:
-                print(f"Warning: {duplicate_count} duplicate entries based on 'Mitarbeiter_ID' were removed.")
-                critical_employees = critical_employees.drop_duplicates(subset=["Mitarbeiter_ID"])
+                print(f"Warning: {duplicate_count} duplicate entries based on 'Employee_ID' were removed.")
+                critical_employees = critical_employees.drop_duplicates(subset=["Employee_ID"])
 
         # Top 15 critical employees
-        top_15 = critical_employees.head(15)
+        top_15_employees = critical_employees.head(15)
     except Exception as e:
         print(f"Error sorting critical employees: {e}")
         return None, None
 
     # ** Return results **
     print("Critical employees successfully identified.")
-    return critical_employees, top_15
+    return critical_employees, top_15_employees
 
 def get_critical_employees_all_models(models, X_transformed, df,
                                       feature_names_file="Models/lightgbm_feature_names.pkl", threshold=0.0):
@@ -1328,8 +1328,8 @@ def get_critical_employees_all_models(models, X_transformed, df,
     print(f"Shape of df: {df.shape}")
 
     # Dynamically determine the last month and year from the DataFrame
-    max_year = df["Jahr"].max()
-    max_month_in_max_year = df[df["Jahr"] == max_year]["Monat"].max()
+    max_year = df["Year"].max()
+    max_month_in_max_year = df[df["Year"] == max_year]["Month"].max()
     print(f"Last year in the dataset: {max_year}, last month in the year: {max_month_in_max_year}")
 
     # ** Synchronize between X_transformed and df **
@@ -1385,15 +1385,15 @@ def get_critical_employees_all_models(models, X_transformed, df,
 
             # Filter data for the last month and year
             df_copy = df_copy[
-                (df_copy["Fluktuation"] == 0) &
-                (df_copy["Monat"] == max_month_in_max_year) &
-                (df_copy["Jahr"] == max_year)
+                (df_copy["Turnover"] == 0) &
+                (df_copy["Month"] == max_month_in_max_year) &
+                (df_copy["Year"] == max_year)
                 ]
 
             # Determine critical employees and top 15
             critical_employees = df_copy[df_copy["Churn Probability"] > threshold]
             critical_employees = critical_employees.sort_values(by="Churn Probability", ascending=False)
-            critical_employees = critical_employees.drop_duplicates(subset=["Mitarbeiter_ID"], keep="first")
+            critical_employees = critical_employees.drop_duplicates(subset=["Employee_ID"], keep="first")
 
             top_15 = critical_employees.head(15)
 
@@ -1451,17 +1451,17 @@ def compare_model_top_employees(file_paths, output_file="Outputs/Comparison_Top_
             df = pd.read_csv(file_path)
 
             # Check necessary columns
-            required_columns = {"Name", "Mitarbeiter_ID", "Fluktuationswahrscheinlichkeit"}
+            required_columns = {"Name", "Employee_ID", "Churn Probability"}
             if not required_columns.issubset(df.columns):
                 raise ValueError(
                     f"The file '{file_path}' does not contain the required columns: {required_columns}."
                 )
 
             # Select only required columns
-            df = df[["Name", "Mitarbeiter_ID", "Fluktuationswahrscheinlichkeit"]].copy()
+            df = df[["Name", "Employee_ID", "Churn Probability"]].copy()
 
             # Rename column to include model information
-            df.rename(columns={"Fluktuationswahrscheinlichkeit": f"Churn_{model} (%)"}, inplace=True)
+            df.rename(columns={"Churn Probability": f"Churn_{model} (%)"}, inplace=True)
             model_data[model] = df
         except Exception as e:
             print(f"Error loading from {file_path}: {e}")
@@ -1474,18 +1474,18 @@ def compare_model_top_employees(file_paths, output_file="Outputs/Comparison_Top_
         if combined_df is None:
             combined_df = df
         else:
-            # Merge based on Name and Mitarbeiter_ID
-            combined_df = pd.merge(combined_df, df, on=["Name", "Mitarbeiter_ID"], how="outer")
+            # Merge based on Name and Employee_ID
+            combined_df = pd.merge(combined_df, df, on=["Name", "Employee_ID"], how="outer")
 
     # Count matches
     print("\nCounting matches...")
-    combined_df["Frequency_in_Models"] = combined_df.notna().sum(axis=1) - 2  # Ignore 'Name' and 'Mitarbeiter_ID'
+    combined_df["Frequency_in_Models"] = combined_df.notna().sum(axis=1) - 2  # Ignore 'Name' and 'Employee_ID'
 
     # Check for identical entries across multiple models
     combined_df["Match"] = combined_df["Frequency_in_Models"] > 1
 
     # Sort data alphabetically by Name and ID
-    combined_df = combined_df.sort_values(by=["Name", "Mitarbeiter_ID"]).reset_index(drop=True)
+    combined_df = combined_df.sort_values(by=["Name", "Employee_ID"]).reset_index(drop=True)
 
     # Save the results
     print(f"Saving results to '{output_file}'...")
@@ -1706,7 +1706,7 @@ def main():
             print("WARNING: No top 15 employees found.")
         else:
             print(
-                f"Top 15 Employees:\n{top_15_employees[['Mitarbeiter_ID', 'Name', 'Churn Probability']]}")
+                f"Top 15 Employees:\n{top_15_employees[['Employee_ID', 'Name', 'Churn Probability']]}")
     except Exception as e:
         print(f"Error identifying critical employees: {e}")
         return
@@ -1742,7 +1742,7 @@ def main():
                         print(f"WARNING: No top 15 employees found for {model_name}.")
                     else:
                         print(f"Top 15 Employees for {model_name}:\n"
-                              f"{top_15_employees[['Mitarbeiter_ID', 'Name', 'Churn Probability']]}")
+                              f"{top_15_employees[['Employee_ID', 'Name', 'Churn Probability']]}")
 
                     # Save results
                     save_results(
