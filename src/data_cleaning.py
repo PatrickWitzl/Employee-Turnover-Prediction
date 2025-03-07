@@ -67,6 +67,6 @@ if __name__ == "__main__":
 
 
     # Bereinigten Datensatz speichern
-    cleaned_file_path = "../data/HR_cleaned.csv"
+    cleaned_file_path = "../data/HR_bereinigt.csv"
     cleaned_df.to_csv(cleaned_file_path, index=False)
     print(f"Cleaned dataset saved to {cleaned_file_path}")
