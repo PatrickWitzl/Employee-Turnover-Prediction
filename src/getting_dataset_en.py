@@ -874,7 +874,7 @@ for year in years:
                                     loc=(15 + positions.index(employee["Position"]) * 5),
                                     scale=5  # Larger spread for more realistic distribution
                                 ))),
-                "Illness Days": illness_days,
+                "Absence Days": illness_days,
                 "Absence Reason": absence_reason,
                 "Annual Performance Review": random.randint(1, 5),
                 "Location": random.choices(locations, weights=[70, 20, 10])[0],

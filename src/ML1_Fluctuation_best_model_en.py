@@ -60,7 +60,7 @@ def preprocess_data(df):
     - Select features based on analysis
     - Apply one-hot encoding for categorical features
     - Handle class imbalance using SMOTE
-    - Adjust "Absence_Sick_Days" based on "Reason_for_Absence"
+    - Adjust "Absence Days" based on "Absence Reason"
 
     Args:
         df (pd.DataFrame): The original DataFrame.
@@ -73,25 +73,25 @@ def preprocess_data(df):
     """
     # Remove employees with "Retirement" status
     df = df.copy()  # Avoid modifying the original
-    df = df[df['Status'] != 'Retirement']
-    print(f"Shape after removing 'Retirement': {df.shape}")
+    df = df[df['Status'] != 'Retired']
+    print(f"Shape after removing 'Retired': {df.shape}")
 
-    # Clean "Absence_Sick_Days" if "Reason_for_Absence" is not "Sick"
-    df['Absence_Sick_Days'] = df.apply(
-        lambda row: row['Absence_Sick_Days'] if row['Reason_for_Absence'] == "Sick" else 0,
+    # Clean "Absence Days" if "Absence Reason" is not "Sick"
+    df['Absence Days'] = df.apply(
+        lambda row: row['Absence Days'] if row['Absence Reason'] == "Illness" else 0,
         axis=1
     )
 
     # Derive the target variable "Turnover"
-    df['Turnover'] = df['Status'].apply(lambda x: 1 if x == "Terminated" else 0)
+    df['Turnover'] = df['Status'].apply(lambda x: 1 if x == "Left" else 0)
 
     # Combine features (manual selection after analysis)
     selected_features = [
-        'Year', 'Month', 'Age', 'Overtime', 'Absence_Sick_Days',
-        'Salary', 'Satisfaction', 'Training_Costs',
+        'Year', 'Month', 'Age', 'Overtime', 'Absence Days',
+        'Salary', 'Satisfaction', 'Switching Readiness', 'Training Costs',
         'Position', 'Gender', 'Location',
-        'Working_Hours_Model', 'Marital_Status',
-        'Children', 'Job_Role_Progression', 'Job_Level', 'Tenure'
+        'Work Model', 'Married',
+        'Children', 'Job Role Progression', 'Job Level', 'Tenure'
     ]
     X = df[selected_features]
     y = df['Turnover']
@@ -1797,4 +1797,3 @@ if __name__ == "__main__":
     plt.close("all")
     end_time = time.time()
     print(f"\nAnalysis completed in {end_time - start_time:.2f} seconds.")
-.")
