@@ -22,12 +22,12 @@ def prepare_data(df):
     Categorize employees into three main categories:
     - Active
     - Retired
-    - Terminated
+    - Left
     """
     if 'Status' in df.columns:
         df["Exit_Category"] = df["Status"].apply(
-            lambda x: "Retired" if x == "Ruhestand"
-            else ("Terminated" if x == "Ausgeschieden"
+            lambda x: "Retired" if x == "Retired"
+            else ("Left" if x == "Left"
                   else "Active")
         )
     return df
@@ -37,20 +37,20 @@ def filter_status_changes(df):
     """
     Filter status changes, including the following categories:
     - Active
-    - Terminated
+    - Left
     - Retired (optional, depending on the analysis)
     """
     if not isinstance(df, pd.DataFrame):
         raise TypeError(f"Expected a pd.DataFrame, received: {type(df)}")
 
     # Filter for specific analysis: Exclude "Retired" if not relevant.
-    filtered_df = df[df['Status'].isin(['Aktiv', 'Ausgeschieden', 'Ruhestand'])]
+    filtered_df = df[df['Status'].isin(['Active', 'Left', 'Retired'])]
     return filtered_df
 
 
-def plot_active_and_terminated(df, save_path):
+def plot_active_and_left(df, save_path):
     """
-    Add plots for 'Retired' status to the existing 'Active' and 'Terminated' statuses.
+    Add plots for 'Retired' status to the existing 'Active' and 'Left' statuses.
     """
     save_path = Path(save_path)
     save_path.mkdir(parents=True, exist_ok=True)
@@ -59,14 +59,14 @@ def plot_active_and_terminated(df, save_path):
     if not required_columns.issubset(df.columns):
         raise ValueError(f"The DataFrame must contain the columns {required_columns}.")
 
-    # Calculate yearly counts of Terminated, Retired, and Active employees
-    terminated_per_year = (
-        df[df['Exit_Category'] == 'Terminated']
+    # Calculate yearly counts of Left, Retired, and Active employees
+    left_per_year = (
+        df[df['Exit_Category'] == 'Left']
         .groupby('Year')['Employee_ID']
         .nunique()
         .reset_index()
     )
-    terminated_per_year.rename(columns={'Employee_ID': 'Terminated_Count'}, inplace=True)
+    left_per_year.rename(columns={'Employee_ID': 'Left_Count'}, inplace=True)
 
     retired_per_year = (
         df[df['Exit_Category'] == 'Retired']
@@ -84,15 +84,15 @@ def plot_active_and_terminated(df, save_path):
     )
     active_per_year.rename(columns={'Employee_ID': 'Active_Count'}, inplace=True)
 
-    # Plot: Terminated
+    # Plot: Left
     plt.figure(figsize=(8, 6))
-    plt.bar(terminated_per_year['Year'], terminated_per_year['Terminated_Count'], color='#FF5733', alpha=0.8,
+    plt.bar(left_per_year['Year'], left_per_year['Left_Count'], color='#FF5733', alpha=0.8,
             edgecolor='black')
-    plt.title('Number of Employees Terminated per Year')
+    plt.title('Number of Employees Left per Year')
     plt.xlabel('Year')
-    plt.ylabel('Number of Terminated Employees')
+    plt.ylabel('Number of Left Employees')
     plt.tight_layout()
-    plt.savefig(save_path / "terminated_per_year.png", dpi=300)
+    plt.savefig(save_path / "left_per_year.png", dpi=300)
     plt.close()
 
     # Plot: Retired
@@ -121,7 +121,7 @@ def group_and_summarize_by_year(df):
     """
     Group data by year and category:
     - Active
-    - Terminated
+    - Left
     - Retired
     """
     if not isinstance(df, pd.DataFrame):
@@ -300,24 +300,14 @@ def enhanced_cluster_visualizations(df_filtered, cluster_features, save_dir):
     plt.savefig(save_dir / "silhouette_plot.png", bbox_inches="tight")
     plt.show()
 
-    # Interactive Scatterplot
-    fig = px.scatter(
-        df, x='Age', y='Salary', color='Cluster',
-        title="Cluster Analysis: Age vs. Salary (Interactive)",
-        labels={'Cluster': 'Cluster'},
-        hover_data=cluster_features
-    )
-    fig.write_html(str(save_dir / "cluster_interactive.html"))
-    fig.show()
 
-
-def yearly_active_and_terminated_analysis(df_filtered, save_path):
-    """Analysis of the number of active and terminated employees per year."""
+def yearly_active_and_left_analysis(df_filtered, save_path):
+    """Analysis of the number of active and left employees per year."""
     if {'Year', 'Employee_ID', 'Status'}.issubset(df_filtered.columns):
         # Remove duplicate entries based on year and employee ID
         unique_df = df_filtered.drop_duplicates(subset=['Year', 'Employee_ID'])
 
-        # Group and count the terminated ("Terminated") and active ("Active") employees per year
+        # Group and count the left ("Left") and active ("Active") employees per year
         yearly_data = (
             unique_df
             .groupby(['Year', 'Status'])['Employee_ID']
@@ -328,14 +318,14 @@ def yearly_active_and_terminated_analysis(df_filtered, save_path):
         yearly_data = yearly_data.fillna(0).reset_index()  # Fill missing values with 0
 
         # Display results
-        print("Yearly Analysis (Count of Active and Terminated):")
+        print("Yearly Analysis (Count of Active and Left):")
         print(yearly_data)
 
         # Visualization
         plt.figure(figsize=(12, 6))
-        plt.plot(yearly_data['Year'], yearly_data['Terminated'], marker='o', label="Terminated", color='red')
+        plt.plot(yearly_data['Year'], yearly_data['Left'], marker='o', label="Left", color='red')
         plt.plot(yearly_data['Year'], yearly_data['Active'], marker='o', label="Active", color='green')
-        plt.title("Number of Active and Terminated Employees Per Year")
+        plt.title("Number of Active and Left Employees Per Year")
         plt.xlabel("Year")
         plt.ylabel("Employee Count")
         plt.legend()
@@ -373,27 +363,27 @@ def yearly_hired_analysis(df, save_path):
     else:
         print("The column 'Hire_Date' is missing in the DataFrame.")
 
-def yearly_terminated_analysis(df, save_path):
-    """Analysis of the number of terminated employees per year."""
+def yearly_left_analysis(df, save_path):
+    """Analysis of the number of left employees per year."""
     if {'Year', 'Employee_ID', 'Status'}.issubset(df.columns):
-        # Filter terminated employees
-        terminated_df = df[df['Status'] == 'Terminated']
+        # Filter left employees
+        left_df = df[df['Status'] == 'Left']
 
         # Group and count employees per year
-        terminated_per_year = terminated_df.groupby('Year')['Employee_ID'].nunique().reset_index()
-        terminated_per_year.columns = ['Year', 'Terminated']
+        left_per_year = left_df.groupby('Year')['Employee_ID'].nunique().reset_index()
+        left_per_year.columns = ['Year', 'Left']
 
         # Display results
-        print("Yearly Analysis (Number of Terminated Employees):")
-        print(terminated_per_year)
+        print("Yearly Analysis (Number of Left Employees):")
+        print(left_per_year)
 
         # Visualization
         plt.figure(figsize=(12, 6))
-        plt.bar(terminated_per_year['Year'], terminated_per_year['Terminated'], color='red', alpha=0.7,
-                label="Terminated")
-        plt.title("Yearly Number of Terminated Employees")
+        plt.bar(left_per_year['Year'], left_per_year['Left'], color='red', alpha=0.7,
+                label="left")
+        plt.title("Yearly Number of Left Employees")
         plt.xlabel("Year")
-        plt.ylabel("Number of Terminated Employees")
+        plt.ylabel("Number of left Employees")
         plt.grid(axis='y', linestyle='--', alpha=0.7)
         plt.legend()
         plt.savefig(save_path)
@@ -457,7 +447,7 @@ def main():
 
     # 2. Filter status changes (only keep relevant categories)
     df_filtered = filter_status_changes(df)
-    print("Data filtered (only 'Active', 'Terminated', 'Retired').")
+    print("Data filtered (only 'Active', 'Left', 'Retired').")
 
     # 3. Group and summarize data
     grouped_data = group_and_summarize_by_year(df_filtered)
@@ -466,23 +456,23 @@ def main():
 
     # 4. Create plots
 
-    # a) Trend of active/terminated employees
-    print("Creating trend of active/terminated employees...")
-    yearly_active_and_terminated_analysis(df_filtered, PLOTS_DIR / "active_and_terminated_trend.png")
+    # a) Trend of active/left employees
+    print("Creating trend of active/left employees...")
+    yearly_active_and_left_analysis(df_filtered, PLOTS_DIR / "active_and_left_trend.png")
 
-    # b) Plots: Hired and terminated employees
+    # b) Plots: Hired and left employees
     print("Creating plot for hired employees per year...")
     yearly_hired_analysis(df, PLOTS_DIR / "hired_per_year.png")
 
-    print("Creating plot for terminated employees per year...")
-    yearly_terminated_analysis(df, PLOTS_DIR / "terminated_per_year.png")
+    print("Creating plot for left employees per year...")
+    yearly_left_analysis(df, PLOTS_DIR / "left_per_year.png")
 
     print("Creating trend of active employees...")
     yearly_active_trend(df, PLOTS_DIR / "active_trend.png")
 
-    # c) Combined plot (Active, Terminated, Retired)
-    print("Creating combined plot for 'Active', 'Terminated', and 'Retired'...")
-    plot_active_and_terminated(df_filtered, PLOTS_DIR)
+    # c) Combined plot (Active, Left, Retired)
+    print("Creating combined plot for 'Active', 'Left', and 'Retired'...")
+    plot_active_and_left(df_filtered, PLOTS_DIR)
 
     # 5. Create boxplots
     variables = ['Salary', 'Overtime', 'Willingness_to_Change', 'Satisfaction']  # Example variables
@@ -502,7 +492,7 @@ def main():
     analyze_extreme_groups(df_filtered)
 
     # 9. Advanced cluster analysis and visualizations
-    cluster_features = ['Age', 'Salary', 'Overtime', 'Willingness_to_Change', 'Satisfaction']  # Example
+    cluster_features = ['Age', 'Salary', 'Overtime', 'Switching Readiness', 'Satisfaction']  # Example
     if all(feature in df_filtered.columns for feature in cluster_features):
         print("Performing advanced cluster visualizations...")
         enhanced_cluster_visualizations(df_filtered, cluster_features, PLOTS_DIR)

@@ -111,19 +111,99 @@ def plot_scatterplots(df, relevant_columns, plots_dir, plot_name):
     plt.savefig(plots_dir / plot_name, bbox_inches="tight")
     plt.show()
 
-
-# Function: Create heatmap of correlation matrix
-def plot_correlation_heatmap(df, numerical_columns, plots_dir, plot_name):
-    if len(numerical_columns) > 1:
-        print("\nCreating heatmap of the correlation matrix...")
-        corr_matrix = df[numerical_columns].corr()
+# Funktion: Erstelle Heatmap der Korrelationsmatrix
+def plot_correlation_heatmap(df, numerische_spalten, plots_dir, plot_name):
+    if len(numerische_spalten) > 1:
+        print("\nErstelle Heatmap der Korrelationsmatrix...")
+        corr_matrix = df[numerische_spalten].corr()
         mask = np.eye(corr_matrix.shape[0], dtype=bool)
 
-        # Set pandas display options to fully print the matrix
+        # Pandas-Anzeigeoptionen setzen, um die Matrix vollständig zu drucken
         with pd.option_context('display.max_rows', None, 'display.max_columns', None):
             print(corr_matrix)
 
         plt.figure(figsize=(12, 8))
         sns.heatmap(corr_matrix, annot=True, cmap="coolwarm", fmt=".2f", linewidths=0.5,
                     cbar_kws={"shrink": 0.8}, vmin=-1, vmax=1, mask=mask)
-        plt.title("Correlation Matrix with Excluded Diagonal
+        plt.title("Korrelationsmatrix mit ausgeschlossener Hauptdiagonale")
+        plt.savefig(plots_dir / plot_name, bbox_inches="tight")
+        plt.show()
+
+
+# Function: Density Plot (KDE) Example
+def plot_kde(df, column, plots_dir, plot_name):
+    if column in df.columns:
+        plt.figure(figsize=(8, 5))
+        sns.kdeplot(df[column], fill=True, color="green")
+        plt.title(f"Density Distribution of {column}")
+        plt.savefig(plots_dir / plot_name, bbox_inches="tight")
+        plt.show()
+
+
+# Function: WordCloud for Text Columns
+def plot_wordcloud(df, text_column, plots_dir, plot_name):
+    if text_column in df.columns:
+        print(f"\nGenerating WordCloud for '{text_column}'...")
+        text_data = " ".join(df[text_column].dropna())
+        wordcloud = WordCloud(width=800, height=400, background_color="white").generate(text_data)
+
+        plt.figure(figsize=(10, 5))
+        plt.imshow(wordcloud, interpolation="bilinear")
+        plt.axis("off")
+        plt.savefig(plots_dir / plot_name, bbox_inches="tight")
+        plt.show()
+
+
+# Main Function
+def main():
+    # Start Timer
+    start_time = time.time()
+
+    # Define Base Directory for Plots
+    PLOTS_DIR = Path("plots")
+    ensure_dir_exists(PLOTS_DIR)
+
+    # Load Data
+    data_file_path = Path("../data/HR_cleaned.csv", low_memory=False)
+    if not data_file_path.exists():
+        print(f"ERROR: File '{data_file_path}' does not exist.")
+        exit(1)
+
+    df = pd.read_csv(data_file_path)
+    print("Cleaned dataset successfully loaded!")
+
+    # Analyze Columns
+    numerical_columns = df.select_dtypes(include=["float64", "int64"]).columns
+    categorical_columns = df.select_dtypes(include=["object"]).columns
+    print("Data Types:")
+    print(df.dtypes)
+    print("\nMissing Values:")
+    print(df.isnull().sum())
+
+    # Visualization: Unique IDs per Year
+    plot_combined_unique_employee_ids_by_year(df, "Gender", "Year", PLOTS_DIR, "02_gender_by_year.png")
+    plot_combined_unique_employee_ids_by_year(df, "Job Level", "Year", PLOTS_DIR, "03_job_level_by_year.png")
+
+    plot_skewness_kurtosis(df, numerical_columns)
+
+    plot_histograms(df, numerical_columns, PLOTS_DIR, "03_histograms.png")
+
+    relevant_columns = [col for col in numerical_columns if col not in [
+        "Employee_ID", "Satisfaction", "Training Costs",
+        "Team Size", "Internal Trainings", "Vacation Days Taken",
+        "Annual Performance Review", "Year", "Number of Subordinates", "Time to Retirement", "Turnover Willingness", "Month"]]
+    plot_scatterplots(df, relevant_columns, PLOTS_DIR, "04_scatterplots.png")
+
+    plot_correlation_heatmap(df, numerical_columns, PLOTS_DIR, "05_correlation_heatmap.png")
+
+    plot_kde(df, "Turnover Willingness", PLOTS_DIR, "06_kde_turnover_willingness.png")
+
+    plot_wordcloud(df, "Job Role Progression", PLOTS_DIR, "07_wordcloud_job_role_progression.png")
+
+    # Stop Timer
+    end_time = time.time()
+    print(f"Analysis completed in {end_time - start_time:.2f} seconds.")
+
+
+if __name__ == "__main__":
+    main()

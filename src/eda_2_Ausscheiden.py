@@ -213,55 +213,6 @@ def analyze_extreme_groups(df_filtered):
     print("\nExtremgruppen: Niedrige Gehälter:")
     print(extreme_low.describe())
 
-
-#def cluster_analysis(df_filtered, cluster_features, save_dir):
-    #"""Cluster-Analyse durchführen mit kombinierter Boxplot-Darstellung."""
-    #df = df_filtered.dropna(subset=cluster_features)
-    #if df.empty:
-    #    print("Fehler: Keine geeigneten Daten für die Cluster-Analyse verfügbar.")
-    #    return
-
-    # Standardisierung der Features
-    #scaler = StandardScaler()
-    #scaled_data = scaler.fit_transform(df[cluster_features])
-
-    # K-Means-Clustering
-    #kmeans = KMeans(n_clusters=3, random_state=42)
-    #df['Cluster'] = kmeans.fit_predict(scaled_data)
-
-    # Cluster-Mittelwerte anzeigen
-    #cluster_means = df.groupby('Cluster')[cluster_features].mean()
-    #print("\nCluster-Mittelwerte:\n", cluster_means)
-    #
-    ## Cluster-Scatterplot (Alter vs. Gehalt)
-    #plt.figure(figsize=(10, 6))
-    #sns.scatterplot(data=df, x='Alter', y='Gehalt', hue='Cluster', palette="Set1")
-    #plt.title("Cluster-Analyse: Alter vs Gehalt")
-    #plt.xlabel("Alter")
-    #plt.ylabel("Gehalt")
-    #plt.legend(title="Cluster")
-    #plt.savefig(save_dir / "cluster_alter_gehalt.png")
-    #plt.show()
-
-    # Kombinierte Boxplots für Cluster-Features
-    #plt.figure(figsize=(14, 8))
-    #df_long = df.melt(id_vars='Cluster', value_vars=cluster_features,
-    #                  var_name="Feature", value_name="Wert")
-    #sns.boxplot(
-    #    data=df_long,
-    #    x='Feature',
-    #    y='Wert',
-    #    hue='Cluster',
-    #    palette="Set2"
-    #)
-    #plt.title("Kombinierter Boxplot: Verteilung der Features nach Cluster")
-    #plt.xlabel("Feature")
-    #plt.ylabel("Wert")
-    #plt.legend(title="Cluster")
-    #plt.savefig(save_dir / "combined_boxplot.png")
-    #plt.show()
-
-
 def enhanced_cluster_visualizations(df_filtered, cluster_features, save_dir):
     """
     Erweiterte Visualisierung für die Cluster-Analyse.
@@ -289,20 +240,6 @@ def enhanced_cluster_visualizations(df_filtered, cluster_features, save_dir):
     print("\nCluster-Mittelwerte:")
     print(cluster_means)
 
-    # 1. Scatterplot mit Centroiden
-    #centroids = scaler.inverse_transform(kmeans.cluster_centers_)  # Zentroiden zurücktransformieren
-    #plt.figure(figsize=(10, 6))
-    #sns.scatterplot(data=df, x='Alter', y='Gehalt', hue='Cluster', palette="Set1", s=50)
-    #plt.scatter(centroids[:, cluster_features.index('Alter')],
-    #            centroids[:, cluster_features.index('Gehalt')],
-    #            s=200, c='black', marker='X', label='Centroid')
-    #plt.title("Cluster-Analyse: Alter vs. Gehalt mit Centroiden", fontsize=16)
-    #plt.xlabel("Alter", fontsize=14)
-    #plt.ylabel("Gehalt", fontsize=14)
-    #plt.legend(title="Cluster", fontsize=12)
-    #plt.tight_layout()
-    #plt.savefig(save_dir / "cluster_alter_gehalt_centroid.png", bbox_inches="tight")
-    #plt.show()
 
     # 2. Pairplot
     sns.pairplot(df[cluster_features + ['Cluster']], hue='Cluster', palette="Set2", diag_kind="kde", height=2.5)
@@ -359,15 +296,7 @@ def enhanced_cluster_visualizations(df_filtered, cluster_features, save_dir):
     plt.savefig(save_dir / "silhouette_plot.png", bbox_inches="tight")
     plt.show()
 
-    # 6. Interaktiver Scatterplot
-    fig = px.scatter(
-        df, x='Alter', y='Gehalt', color='Cluster',
-        title="Cluster-Analyse: Alter vs. Gehalt (interaktiv)",
-        labels={'Cluster': 'Cluster'},
-        hover_data=cluster_features
-    )
-    fig.write_html(str(save_dir / "cluster_interactive.html"))
-    fig.show()
+
 
 def yearly_active_and_terminated_analysis(df_filtered, save_path):
     """Analyse der Anzahl der aktiven und ausgeschiedenen Mitarbeiter pro Jahr."""
