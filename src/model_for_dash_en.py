@@ -1,9 +1,7 @@
 import os
 import joblib
-import pandas as pd
-import xgboost as xgb
-from data_loading import load_dataset
-from data_cleaning import clean_dataset
+from de.src_de.data_loading import load_dataset
+from de.src_de.data_cleaning import clean_dataset
 from ML1_Fluctuation_best_model_6_ohne_pca import preprocess_data
 from ML1_Fluctuation_best_model_6_ohne_pca import get_critical_employees
 

@@ -1,8 +1,6 @@
 import pandas as pd
 import time
 
-from data_loading import load_dataset
-
 # Start timer
 start_time = time.time()
 
