@@ -1,21 +1,12 @@
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-import time
-from sklearn.cluster import KMeans
-from sklearn.preprocessing import StandardScaler
 from pathlib import Path
-import matplotlib.ticker as mticker
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_samples
-from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
 import pandas as pd
-import plotly.express as px
+
 
 def prepare_data(df):
     """

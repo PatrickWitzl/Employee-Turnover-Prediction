@@ -302,3 +302,6 @@ cython_debug/
 .idea/dictionaries
 .idea/vcs.xml
 .idea/modules.xml
+
+# Pipreqs ignore file
+.pipreqs.ignore

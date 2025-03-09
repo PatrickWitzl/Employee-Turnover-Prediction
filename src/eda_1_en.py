@@ -5,7 +5,6 @@ import numpy as np
 import os
 import time
 from pathlib import Path
-from wordcloud import WordCloud
 
 
 # Function: Ensure that a directory exists
@@ -140,18 +139,6 @@ def plot_kde(df, column, plots_dir, plot_name):
         plt.show()
 
 
-# Function: WordCloud for Text Columns
-def plot_wordcloud(df, text_column, plots_dir, plot_name):
-    if text_column in df.columns:
-        print(f"\nGenerating WordCloud for '{text_column}'...")
-        text_data = " ".join(df[text_column].dropna())
-        wordcloud = WordCloud(width=800, height=400, background_color="white").generate(text_data)
-
-        plt.figure(figsize=(10, 5))
-        plt.imshow(wordcloud, interpolation="bilinear")
-        plt.axis("off")
-        plt.savefig(plots_dir / plot_name, bbox_inches="tight")
-        plt.show()
 
 
 # Main Function
@@ -197,8 +184,6 @@ def main():
     plot_correlation_heatmap(df, numerical_columns, PLOTS_DIR, "05_correlation_heatmap.png")
 
     plot_kde(df, "Turnover Willingness", PLOTS_DIR, "06_kde_turnover_willingness.png")
-
-    plot_wordcloud(df, "Job Role Progression", PLOTS_DIR, "07_wordcloud_job_role_progression.png")
 
     # Stop Timer
     end_time = time.time()
