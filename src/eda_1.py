@@ -5,7 +5,6 @@ import numpy as np
 import os
 import time
 from pathlib import Path
-from wordcloud import WordCloud
 
 # Funktion: Sicherstellen, dass ein Verzeichnis existiert
 def ensure_dir_exists(directory):
@@ -138,20 +137,6 @@ def plot_kde(df, column, plots_dir, plot_name):
         plt.show()
 
 
-# Funktion: Wordcloud für Textspalten
-def plot_wordcloud(df, text_column, plots_dir, plot_name):
-    if text_column in df.columns:
-        print(f"\nErstelle WordCloud für '{text_column}'...")
-        text_data = " ".join(df[text_column].dropna())
-        wordcloud = WordCloud(width=800, height=400, background_color="white").generate(text_data)
-
-        plt.figure(figsize=(10, 5))
-        plt.imshow(wordcloud, interpolation="bilinear")
-        plt.axis("off")
-        plt.savefig(plots_dir / plot_name, bbox_inches="tight")
-        plt.show()
-
-
 # Hauptfunktion
 def main():
     # Timer starten
@@ -195,8 +180,6 @@ def main():
     plot_correlation_heatmap(df, numerische_spalten, PLOTS_DIR, "05_correlation_heatmap.png")
 
     plot_kde(df, "Wechselbereitschaft", PLOTS_DIR, "06_kde_wechselbereitschaft.png")
-
-    plot_wordcloud(df, "Job Role Progression", PLOTS_DIR, "07_wordcloud_job_role_progression.png")
 
     # Timer stoppen
     end_time = time.time()
