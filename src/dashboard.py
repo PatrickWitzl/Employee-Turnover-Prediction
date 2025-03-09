@@ -8,7 +8,7 @@ import pandas as pd
 import plotly.express as px
 from io import BytesIO
 from dash import dcc, html, Input, Output, State, dash_table
-from de.src_de.model_for_dash import process_and_identify_critical_employees
+from src.model_for_dash import process_and_identify_critical_employees
 
 # Beispielhafte Modellpfade
 model_paths = {
