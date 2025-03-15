@@ -1,6 +1,6 @@
 import pandas as pd
 import os
-import time
+
 
 
 def load_dataset(file_path, save_filtered_path):
@@ -59,11 +59,6 @@ def load_dataset(file_path, save_filtered_path):
         print(f"Unexpected error: {e}")
     return None
 
-
-# Optional: Measure runtime
-start_time = time.time()
-end_time = time.time()
-print(f"Analysis completed in {end_time - start_time:.2f} seconds.")
 
 if __name__ == "__main__":
     # Example: Input and output paths

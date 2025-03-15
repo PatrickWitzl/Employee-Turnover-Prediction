@@ -1,9 +1,4 @@
 import pandas as pd
-import time
-
-# Start timer
-start_time = time.time()
-
 
 def clean_dataset(df):
     """
@@ -25,14 +20,7 @@ def clean_dataset(df):
 
     # Fill missing values in 'Exit Date' for active employees
     df["Exit Date"] = df["Exit Date"].fillna("No Exit")  # Or leave as None
-
-    # Handle missing values
-    df = df.fillna({
-        "Internal Training": 0,
-        "Training Costs": 0,
-        "Illness Days": df["Illness Days"].median(),
-        "Overtime": df["Overtime"].median(),
-    })
+    df["Absence Reason"] = df["Absence Reason"].fillna("unknowm")  # Or leave as None
 
     # Clean 'Hiring Date' without conversion
     df["Hiring Date"] = df["Hiring Date"].astype(str)  # Ensure all values are strings
@@ -41,7 +29,7 @@ def clean_dataset(df):
 
     # Further clean and convert columns
     df["Switching Readiness"] = df["Switching Readiness"].astype(float)
-    df["Illness Days"] = df["Illness Days"].astype(int)
+    df["Absence Days"] = df["Absence Days"].astype(int)
     df["Overtime"] = df["Overtime"].astype(int)
 
     # Remove duplicate entries
@@ -53,9 +41,6 @@ def clean_dataset(df):
 
     return df
 
-# Calculate duration
-end_time = time.time()
-print(f"Analysis completed in {end_time - start_time:.2f} seconds.")
 
 # Save the cleaned dataset
 if __name__ == "__main__":

@@ -139,13 +139,8 @@ def plot_kde(df, column, plots_dir, plot_name):
         plt.show()
 
 
-
-
 # Main Function
 def main():
-    # Start Timer
-    start_time = time.time()
-
     # Define Base Directory for Plots
     PLOTS_DIR = Path("plots")
     ensure_dir_exists(PLOTS_DIR)
@@ -184,11 +179,6 @@ def main():
     plot_correlation_heatmap(df, numerical_columns, PLOTS_DIR, "05_correlation_heatmap.png")
 
     plot_kde(df, "Turnover Willingness", PLOTS_DIR, "06_kde_turnover_willingness.png")
-
-    # Stop Timer
-    end_time = time.time()
-    print(f"Analysis completed in {end_time - start_time:.2f} seconds.")
-
 
 if __name__ == "__main__":
     main()

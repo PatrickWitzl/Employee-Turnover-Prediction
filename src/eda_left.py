@@ -7,7 +7,6 @@ import seaborn as sns
 import numpy as np
 import pandas as pd
 
-
 def prepare_data(df):
     """
     Categorize employees into three main categories:
@@ -412,13 +411,6 @@ def yearly_active_trend(df, save_path):
 
 
 def main():
-    import time
-    import pandas as pd
-    from pathlib import Path
-
-    # Start timer
-    start_time = time.time()
-
     # Create directory for plots
     PLOTS_DIR = Path("plots")
     PLOTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -487,11 +479,6 @@ def main():
     if all(feature in df_filtered.columns for feature in cluster_features):
         print("Performing advanced cluster visualizations...")
         enhanced_cluster_visualizations(df_filtered, cluster_features, PLOTS_DIR)
-
-    # Stop timer
-    end_time = time.time()
-    print(f"Analysis completed in {end_time - start_time:.2f} seconds.")
-
 
 if __name__ == "__main__":
     main()

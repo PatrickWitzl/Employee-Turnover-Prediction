@@ -27,6 +27,8 @@ try:
 except FileNotFoundError:
     df = pd.DataFrame()
 
+df = df.copy()
+
 color_mapping = {
     "Active": "#1f77b4",
     "Left": "#2ca02c",
@@ -35,9 +37,9 @@ color_mapping = {
 
 # App-Konfiguration
 # Tailwind CSS einbinden
+
 external_stylesheets = [
-    "https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css",
-]
+    "https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css",]
 
 # App-Konfiguration
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets, suppress_callback_exceptions=True)

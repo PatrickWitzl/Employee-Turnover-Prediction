@@ -1,4 +1,4 @@
-dash==3.0.0rc3
+dash==2.18.2
 Faker==37.0.0
 imbalanced_learn==0.13.0
 joblib==1.4.2
